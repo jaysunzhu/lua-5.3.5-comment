@@ -54,7 +54,8 @@ void luaF_initupvals (lua_State *L, LClosure *cl) {
   }
 }
 
-
+//在L->openupval （list of open upvalues in this stack）查找是否含有level
+//找到就返回，否则新建upvalue并插入到L->openupval的头
 UpVal *luaF_findupval (lua_State *L, StkId level) {
   UpVal **pp = &L->openupval;
   UpVal *p;
@@ -71,7 +72,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   uv->refcount = 0;
   uv->u.open.next = *pp;  /* link it to list of open upvalues */
   uv->u.open.touched = 1;
-  *pp = uv;
+  *pp = uv;//插入到列表头
   uv->v = level;  /* current value lives in the stack */
   if (!isintwups(L)) {  /* thread not in list of threads with upvalues? */
     L->twups = G(L)->twups;  /* link it to the list */
@@ -80,7 +81,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   return uv;
 }
 
-
+//upval 从open移到close，没引用则直接释放
 void luaF_close (lua_State *L, StkId level) {
   UpVal *uv;
   while (L->openupval != NULL && (uv = L->openupval)->v >= level) {
@@ -89,6 +90,7 @@ void luaF_close (lua_State *L, StkId level) {
     if (uv->refcount == 0)  /* no references? */
       luaM_free(L, uv);  /* free upvalue */
     else {
+      //进行= operate赋值
       setobj(L, &uv->u.value, uv->v);  /* move value to upvalue slot */
       uv->v = &uv->u.value;  /* now current value lives here */
       luaC_upvalbarrier(L, uv);
@@ -122,7 +124,7 @@ Proto *luaF_newproto (lua_State *L) {
   return f;
 }
 
-
+//proto以及proto结构体内指针所对应的内存释放
 void luaF_freeproto (lua_State *L, Proto *f) {
   luaM_freearray(L, f->code, f->sizecode);
   luaM_freearray(L, f->p, f->sizep);
@@ -138,6 +140,7 @@ void luaF_freeproto (lua_State *L, Proto *f) {
 ** Look for n-th local variable at line 'line' in function 'func'.
 ** Returns NULL if not found.
 */
+//debug功能，获取LocVar的debug信息
 const char *luaF_getlocalname (const Proto *f, int local_number, int pc) {
   int i;
   for (i = 0; i<f->sizelocvars && f->locvars[i].startpc <= pc; i++) {

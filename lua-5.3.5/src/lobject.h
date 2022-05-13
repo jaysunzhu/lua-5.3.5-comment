@@ -499,7 +499,9 @@ typedef union UUdata {
 /* lua函数自由变量描述信息 */
 typedef struct Upvaldesc {
   TString *name;  /* upvalue name (for debug information) */
+  //是否在stack上,_ENV必定不在栈上
   lu_byte instack;  /* whether it is in stack (register) */
+  //instack==true, base+idx地址获得，否则在outer function's list，encup[idx]
   lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */
 } Upvaldesc;
 
@@ -511,6 +513,7 @@ typedef struct Upvaldesc {
 /* lua函数中定义的本地变量 */
 typedef struct LocVar {
   TString *varname;
+  //记录active在proto的pc区间[startpc，endpc)
   int startpc;  /* first point where variable is active */
   int endpc;    /* first point where variable is dead */
 } LocVar;
@@ -539,8 +542,9 @@ typedef struct Proto {
   /* TValue *k数组的大小 */
   int sizek;  /* size of 'k' */
 
-  /* 字节码占用的内存大小 */
+  /* 字节码占用的数组大小 */
   int sizecode;
+  //lineinfo的数组大小
   int sizelineinfo;
 
   /* struct Proto **p指针数组的大小 */
@@ -566,6 +570,7 @@ typedef struct Proto {
 
   /* upvalues指向存放了该函数使用到的所有自由变量的内存地址 */
   Upvaldesc *upvalues;  /* upvalue information */
+  //只保留最近的一个Lua Closure
   struct LClosure *cache;  /* last-created closure with this prototype */
   TString  *source;  /* used for debug information */
   GCObject *gclist;

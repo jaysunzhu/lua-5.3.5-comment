@@ -471,6 +471,7 @@ static const char *getobjname (Proto *p, int lastpc, int reg,
                          ? luaF_getlocalname(p, t + 1, pc)
                          : upvalname(p, t);
         kname(p, pc, k, name);
+        //只有环境是"_ENV"
         return (vn && strcmp(vn, LUA_ENV) == 0) ? "global" : "field";
       }
       case OP_GETUPVAL: {

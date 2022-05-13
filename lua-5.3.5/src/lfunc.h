@@ -7,8 +7,11 @@
 #ifndef lfunc_h
 #define lfunc_h
 
-
+//函数、闭包、local变量、upval、常量。可以通过一下编译成字节码学习
+// https://www.luac.nl/s/14fbea26ac382adff23862142a
 #include "lobject.h"
+
+// struct LocVar、struct Upvaldesc用来辅助描述
 
 
 #define sizeCclosure(n)	(cast(int, sizeof(CClosure)) + \
@@ -34,8 +37,9 @@
 */
 /* lua闭包中所使用的自由变量信息 */
 struct UpVal {
+  //closed，v指向value。opend，v指向stack上slot
   TValue *v;  /* points to stack or to its own value */
-  lu_mem refcount;  /* reference counter */
+  lu_mem refcount;  /* reference counter */ //引用基数，为了做GC
   union {
     struct {  /* (when open) */
       UpVal *next;  /* linked list */
