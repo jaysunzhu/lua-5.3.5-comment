@@ -30,6 +30,7 @@
 */
 #define wgkey(n)		(&(n)->i_key.nk)
 
+//让Table的快速查找元方法的cache失效
 #define invalidateTMcache(t)	((t)->flags = 0)
 
 

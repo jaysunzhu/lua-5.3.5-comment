@@ -422,8 +422,8 @@ int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2) {
     case LUA_TBOOLEAN: return bvalue(t1) == bvalue(t2);  /* true must be 1 !! */
     case LUA_TLIGHTUSERDATA: return pvalue(t1) == pvalue(t2);
     case LUA_TLCF: return fvalue(t1) == fvalue(t2);
-    case LUA_TSHRSTR: return eqshrstr(tsvalue(t1), tsvalue(t2));
-    case LUA_TLNGSTR: return luaS_eqlngstr(tsvalue(t1), tsvalue(t2));
+    case LUA_TSHRSTR: return eqshrstr(tsvalue(t1), tsvalue(t2));//短字符串直接比较地址
+    case LUA_TLNGSTR: return luaS_eqlngstr(tsvalue(t1), tsvalue(t2));//长字符串比较，长度和内存比较
     case LUA_TUSERDATA: {
       if (uvalue(t1) == uvalue(t2)) return 1;
       else if (L == NULL) return 0;
@@ -837,18 +837,17 @@ void luaV_execute (lua_State *L) {
   for (;;) {
     Instruction i;
     StkId ra;
-    /* 从ci->u.l.savedpc中取出一条指令存放到i中 */
-    vmfetch();
+    vmfetch();    /* 从ci->u.l.savedpc中取出一条指令存放到i中 */
     /* 根据指令的操作码做相应的操作 */
     vmdispatch (GET_OPCODE(i)) {
       vmcase(OP_MOVE) {
-        /* move指令，将rb中的值拷贝到ra中 */
-        setobjs2s(L, ra, RB(i));
+        setobjs2s(L, ra, RB(i));        /* move指令，将rb中的值拷贝到ra中 */
         vmbreak;
       }
       vmcase(OP_LOADK) {
         TValue *rb = k + GETARG_Bx(i);
         setobj2s(L, ra, rb);
+
         vmbreak;
       }
       vmcase(OP_LOADKX) {

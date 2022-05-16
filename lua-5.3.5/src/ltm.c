@@ -34,7 +34,7 @@ LUAI_DDEF const char *const luaT_typenames_[LUA_TOTALTAGS] = {
   "proto" /* this last case is used for tests only */
 };
 
-/* 元方法初始化，主要是初始化event名字，同时设置不让GC来回收这些字符串。*/
+/* 元方法初始化，主要是初始化event名字，同时设置不让GC来回收这些字符串 */
 void luaT_init (lua_State *L) {
   static const char *const luaT_eventname[] = {  /* ORDER TM */
     "__index", "__newindex",
@@ -95,6 +95,7 @@ const TValue *luaT_gettmbyobj (lua_State *L, const TValue *o, TMS event) {
 ** with metatable, use their '__name' metafield, if present.
 */
 /* 获取TValue对象中封装的数据对应的数据类型的名字 */
+//取数据类型名字，当userdata和table时，检查key是否含有‘__name’，若有对应的value，就返回起具体名字，否则返回table
 const char *luaT_objtypename (lua_State *L, const TValue *o) {
   Table *mt;
   if ((ttistable(o) && (mt = hvalue(o)->metatable) != NULL) ||
@@ -106,7 +107,7 @@ const char *luaT_objtypename (lua_State *L, const TValue *o) {
   return ttypename(ttnov(o));  /* else use standard type name */
 }
 
-
+//
 void luaT_callTM (lua_State *L, const TValue *f, const TValue *p1,
                   const TValue *p2, TValue *p3, int hasres) {
   ptrdiff_t result = savestack(L, p3);
@@ -128,7 +129,7 @@ void luaT_callTM (lua_State *L, const TValue *f, const TValue *p1,
   }
 }
 
-
+//
 int luaT_callbinTM (lua_State *L, const TValue *p1, const TValue *p2,
                     StkId res, TMS event) {
   const TValue *tm = luaT_gettmbyobj(L, p1, event);  /* try first operand */
@@ -139,7 +140,7 @@ int luaT_callbinTM (lua_State *L, const TValue *p1, const TValue *p2,
   return 1;
 }
 
-
+//
 void luaT_trybinTM (lua_State *L, const TValue *p1, const TValue *p2,
                     StkId res, TMS event) {
   if (!luaT_callbinTM(L, p1, p2, res, event)) {
@@ -162,7 +163,7 @@ void luaT_trybinTM (lua_State *L, const TValue *p1, const TValue *p2,
   }
 }
 
-
+//
 int luaT_callorderTM (lua_State *L, const TValue *p1, const TValue *p2,
                       TMS event) {
   if (!luaT_callbinTM(L, p1, p2, L->top, event))

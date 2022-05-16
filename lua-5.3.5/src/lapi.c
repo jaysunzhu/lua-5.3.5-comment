@@ -1224,8 +1224,10 @@ LUA_API int lua_pcallk (lua_State *L, int nargs, int nresults, int errfunc,
   if (errfunc == 0)
     func = 0;
   else {
+  	// 有错误处理函数
     StkId o = index2addr(L, errfunc);
     api_checkstackindex(L, errfunc, o);
+  	 // errfunc的在线程栈中的绝对偏移
     func = savestack(L, o);
   }
 
@@ -1240,6 +1242,7 @@ LUA_API int lua_pcallk (lua_State *L, int nargs, int nresults, int errfunc,
 
   /* L->nny大于0，或者k为null，说明线程目前暂时不允许被中断执行。 */
   if (k == NULL || L->nny > 0) {  /* no continuation or no yieldable? */
+  	// 如果没有k函数，或当前不可yield，则正常调用pcall(主线程不可yield)
     c.nresults = nresults;  /* do a 'conventional' protected call */
     /*
     ** luaD_pcall()中会以保护模式来运行f_call()函数，而f_call()中又会触发调用上面的c.func

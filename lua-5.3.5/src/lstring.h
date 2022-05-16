@@ -12,7 +12,8 @@
 #include "lstate.h"
 
 
-/* 计算一个字符串对象需要的总内存大小，包括头部和内容两部分 */
+/* 计算一个字符串对象需要的总内存大小，包括头部和内容两部分。*/
+//头部为TString，内容部分是C风格字符串存放，以兼容C接口。即在字符串的末尾加上一个\0
 #define sizelstring(l)  (sizeof(union UTString) + ((l) + 1) * sizeof(char))
 
 /* 计算一个Userdata对象需要的总内存大小，包括头部和内容两部分 */
@@ -36,6 +37,7 @@
 ** equality for short strings, which are always internalized
 */
 /* 判断短字符串是否相等 */
+//短字符串直接比较地址
 #define eqshrstr(a,b)	check_exp((a)->tt == LUA_TSHRSTR, (a) == (b))
 
 

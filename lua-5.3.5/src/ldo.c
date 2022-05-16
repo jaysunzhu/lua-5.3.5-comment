@@ -581,6 +581,8 @@ int luaD_poscall (lua_State *L, CallInfo *ci, StkId firstResult, int nres) {
   StkId res;
   /* 取出在函数调用之前保存在CallInfo对象中预期的函数返回值个数。 */
   int wanted = ci->nresults;
+  //nres是被调用函数实际返回值个数，wanted是调用函数预期的返回值
+  
   if (L->hookmask & (LUA_MASKRET | LUA_MASKLINE)) {
   	
     /* 如果有注册函数调用返回时对应的事件，那么要执行相应的钩子函数。 */
@@ -728,7 +730,8 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
 	
       /* 获取实际传递了的函数参数的个数 */
       int n = cast_int(L->top - func) - 1;  /* number of real arguments */
-	  
+         // nresults 期望返回参数
+         
       /* 
       ** 获取函数内部栈的大小，并做检查。在函数栈中，函数的形参和内部定义的本地变量对应函数栈
       ** 中的哪个栈单元都是在指令解析过程中就确定好了的。函数的实参是在调用函数之前需要先在
@@ -823,6 +826,7 @@ static void stackerror (lua_State *L) {
 ** lua中调用一个函数时都会执行这个函数。被调用的函数其地址为func，函数的参数也存放在栈中，
 ** 紧随在函数之后。函数调用返回时，所有的结果也会存放在栈中，从函数在栈中的原始位置出开始存放。
 */
+//nresult则指定了，这个函数被期望返回多少个返回值
 void luaD_call (lua_State *L, StkId func, int nResults) {
 
   /* 如果函数嵌套调用的层数超过了限制，那么就返回错误 */

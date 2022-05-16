@@ -211,7 +211,7 @@ typedef struct global_State {
   
   /* 
   ** 保存全局的注册表，注册表就是一个全局的table（即整个虚拟机中只有一个注册表），
-  ** 它只能被C代码访问，通常，它用来保存那些需要在几个模块中共享的数据
+  ** 它只能被C代码访问，通常，它用来保存那些需要在几个模块中共享的数据(类似于全局数据)
   */
   TValue l_registry;
 
@@ -239,6 +239,9 @@ typedef struct global_State {
   unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
   int gcpause;  /* size of pause between successive GCs */
   int gcstepmul;  /* GC 'granularity' */
+  
+  // 当调用LUA_THROW接口时，如果当前不处于保护模式，那么会直接调用panic函数
+  // panic函数通常是输出一些关键日志
   lua_CFunction panic;  /* to be called in unprotected errors */
 
   /* 主线程Mainthread对应的状态信息 */

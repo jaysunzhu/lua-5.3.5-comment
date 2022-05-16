@@ -58,14 +58,14 @@
 /* Variant tags for functions */
 /*
 ** LUA_TFUNCTION宏的值是6，即00000110b，那么依下面的定义有：
-** lua闭包的类型为00000110b
-** 没有自由变量的C函数的类型为00010110b
-** 有自由变量的C函数（C闭包）的类型为00100110b
+** lua闭包（有Upval）的类型为00000110b
+** light C函数（无Upval）的类型为00010110b
+** C闭包（有Upval）的类型为00100110b
 */
-#define LUA_TLCL	(LUA_TFUNCTION | (0 << 4))  /* Lua closure */
+#define LUA_TLCL	(LUA_TFUNCTION | (0 << 4))  /* Lua closure 6*/ 
 /* light C function是指没有upvalue的函数 */
-#define LUA_TLCF	(LUA_TFUNCTION | (1 << 4))  /* light C function */
-#define LUA_TCCL	(LUA_TFUNCTION | (2 << 4))  /* C closure */
+#define LUA_TLCF	(LUA_TFUNCTION | (1 << 4))  /* light C function 22*/  
+#define LUA_TCCL	(LUA_TFUNCTION | (2 << 4))  /* C closure 38*/ 
 
 
 /* Variant tags for strings */
@@ -73,8 +73,8 @@
 ** 字符串类型的变种标记，由字符串原始类型按位或变种掩码组成，
 ** 其中0表示短字符串变种掩码，0x10表示长字符串变种掩码
 */
-#define LUA_TSHRSTR	(LUA_TSTRING | (0 << 4))  /* short strings */
-#define LUA_TLNGSTR	(LUA_TSTRING | (1 << 4))  /* long strings */
+#define LUA_TSHRSTR	(LUA_TSTRING | (0 << 4))  /* short strings 4*/ //
+#define LUA_TLNGSTR	(LUA_TSTRING | (1 << 4))  /* long strings 20*/ //
 
 
 /* Variant tags for numbers */
@@ -84,8 +84,8 @@
 ** LUA_TNUMFLT是表示单精度浮点数，LUA_TNUMINT表示整型
 */
 
-#define LUA_TNUMFLT	(LUA_TNUMBER | (0 << 4))  /* float numbers */
-#define LUA_TNUMINT	(LUA_TNUMBER | (1 << 4))  /* integer numbers */
+#define LUA_TNUMFLT	(LUA_TNUMBER | (0 << 4))  /* float numbers 3*/ //
+#define LUA_TNUMINT	(LUA_TNUMBER | (1 << 4))  /* integer numbers 19*/ //
 
 
 /* Bit mark for collectable types */
@@ -145,7 +145,7 @@ struct GCObject {
 // 据，由 GC 负责维护生命期
 typedef union Value {
   GCObject *gc;    /* collectable objects */
-  void *p;         /* light userdata */
+  void *p;         /* light userdata */ //这种值在C中，需要我们自行管理内存
   int b;           /* booleans */
   lua_CFunction f; /* light C functions */
   lua_Integer i;   /* integer numbers */
@@ -397,6 +397,8 @@ typedef struct TString {
   ** 这种情况下，extra成员存放的就是紧跟在头部后面的字符串在luaX_tokens数组中的下标。
   ** 如果一个短字符串不是保留字符串，那么extra就位0。
   */
+//   TString为长字符串时：当extra=0表示该字符串未进行hash运算；当extra=1时表示该字符串已经进行过hash运算。
+//   TString为短字符串时：当extra=0时表示它需要被gc托管；当extra=1时表示该字符串不会被gc回收。
   lu_byte extra;  /* reserved words for short strings; "has hash" for longs */
   /* 由于Lua不以'\0'来识别字符串的长度，因此需要显示保存字符串的长度。 */
   lu_byte shrlen;  /* length for short strings */ /* 短字符串的长度 */
@@ -404,11 +406,12 @@ typedef struct TString {
   union {
     size_t lnglen;  /* length for long strings */ /* 长字符串的长度 */
     /*
-    ** lua是用散列桶来存放string的，hnext用于指向下一个具有相同hash值的string，
+    ** 只有短字符串才有用lua是用散列桶来存放string的，hnext用于指向下一个具有相同hash值的string，
     ** 即具有相同hash值的字符串是用链表来串接起来的。（这个成员由短字符串对象使用。）
     */
     struct TString *hnext;  /* linked list for hash table */
   } u;
+  //内存对象模型中，TString后长度为len+1的空间就是字符串所在内存
 } TString;
 
 
@@ -599,6 +602,7 @@ typedef struct CClosure {
   /* 函数指针 */
   lua_CFunction f;
   /* C Closure对应的自由变量列表 */
+  //和 Lua 闭包不同，在 C 函数中不会去引用外层函数中的局部变量。 所以，C 闭包中的 upval 天生就是关闭状态的
   TValue upvalue[1];  /* list of upvalues */
 } CClosure;
 
@@ -609,6 +613,12 @@ typedef struct LClosure {
   struct Proto *p; /* 存放lua闭包对应的函数原型信息 */
 
 	/* lua闭包所使用的自由变量列表 */
+  //Lua Closure对象的upval有两种来源，
+  //第一、Lua 闭包一般在虚拟机运行的过程中被动态构造出来的。这时，闭包需引用的 upval 都在当前
+  //的数据栈上, 利用 luaF_findupval 可以把数据栈上的值转换为 upval
+  //第二种生成 Lua 闭包的方式是加载一段 Lua 代码。每段 Lua 代码都会被编译成一个函数原型，但 Lua
+  //的外部 API 是不返回函数原型对象的，而是把这个函数原型转换为一个 Lua 闭包对象。如果从源代码加载
+  //的话，不可能有用户构建出来的 upval 的。但是，任何一个代码块都至少有一个 upval ： _ENV 
   UpVal *upvals[1];  /* list of upvalues */
 } LClosure;
 
@@ -647,8 +657,10 @@ typedef union TKey {
   struct {
     TValuefields;
 
-    /* next保存的是Node节点在整个散列数组中的下标，即索引值 */
-    int next;  /* for chaining (offset for next node) */
+    /* next保存的是Node节点中相同mainpostion的下标偏移，即索引值 */
+    //故当前Tkey*指针+next,就可以获得下个Tkey*指针。默认是0，表示没有下一个
+    
+    int next;  /* for chaining (offset for next node) */ 
   } nk;
   TValue tvk;
 } TKey;
@@ -674,12 +686,13 @@ typedef struct Table {
   CommonHeader; /* 公共头部 */
   /*
   ** flags其实是一个unsigned char类型的数据，用于表示这个表提供了哪些元方法，
-  ** 一开始的时候这个flags是0，当查找一次之后，如果该表中存在某个元方法，那么
+  ** 当查找一次之后，如果该表中存在某个元方法，那么
   ** 将该元方法对应的bit置位，下一次查找时只要比较这个bit就行了。
   */
+  //默认值是cast_byte(~0)，即255。只有常用的6个元方法才会使用。  TM_INDEX,TM_NEWINDEX,TM_GC,TM_MODE,TM_LEN,TM_EQ
   lu_byte flags;  /* 1<<p means tagmethod(p) is not present */
 
-  /* 散列表中散列桶数组大小对2取对数的值 */
+  /* 散列表中散列桶数组大小,其中大小做了2的对数。即大小必须符合2的对数 */
   lu_byte lsizenode;  /* log2 of size of 'node' array */
 
   /* 数组部分的大小 */
@@ -710,12 +723,14 @@ typedef struct Table {
 /*
 ** 'module' operation for hashing (size is always a power of 2)
 */
+//对超过范围进行求mod，符合合法性校验。由于是稀疏数组会放到散列桶数，同时字符串hash值等情况都会超过map的size
 #define lmod(s,size) \
 	(check_exp((size&(size-1))==0, (cast(int, (s) & ((size)-1)))))
 
 
 #define twoto(x)	(1<<(x))
-#define sizenode(t)	(twoto((t)->lsizenode))
+//散列表中散列桶数组大小
+#define sizenode(t)	(twoto((t)->lsizenode)) 
 
 
 /*

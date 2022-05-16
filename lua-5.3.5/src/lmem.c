@@ -44,7 +44,7 @@
 
 #define MINSIZEARRAY	4
 
-
+//用来管理可变长数组的。其主要策略是当数组空间不够时，扩大为原来的两倍。
 void *luaM_growaux_ (lua_State *L, void *block, int *size, size_t size_elems,
                      int limit, const char *what) {
   void *newblock;

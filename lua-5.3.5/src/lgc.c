@@ -251,19 +251,19 @@ static void reallymarkobject (global_State *g, GCObject *o) {
   white2gray(o);
   switch (o->tt) {
     case LUA_TSHRSTR: {
-      gray2black(o);
+      gray2black(o);//由于TString不可能包含子节点，因此可以在propagate阶段直接标记为黑色
       g->GCmemtrav += sizelstring(gco2ts(o)->shrlen);
       break;
     }
     case LUA_TLNGSTR: {
-      gray2black(o);
+      gray2black(o);//由于TString不可能包含子节点，因此可以在propagate阶段直接标记为黑色
       g->GCmemtrav += sizelstring(gco2ts(o)->u.lnglen);
       break;
     }
     case LUA_TUSERDATA: {
       TValue uvalue;
       markobjectN(g, gco2u(o)->metatable);  /* mark its metatable */
-      gray2black(o);
+      gray2black(o);//由于TString不可能包含子节点，因此可以在propagate阶段直接标记为黑色
       g->GCmemtrav += sizeudata(gco2u(o));
       getuservalue(g->mainthread, gco2u(o), &uvalue);
       if (valiswhite(&uvalue)) {  /* markvalue(g, &uvalue); */

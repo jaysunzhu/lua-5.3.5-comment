@@ -44,7 +44,7 @@ typedef enum {
 } TMS;
 
 
-
+//快速的剔除不存在的元方法。使用flags 作为cache加速，如果flags有标识命中，就减少一次luaH_getshortstr
 #define gfasttm(g,et,e) ((et) == NULL ? NULL : \
   ((et)->flags & (1u<<(e))) ? NULL : luaT_gettm(et, e, (g)->tmname[e]))
 

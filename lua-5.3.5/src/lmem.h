@@ -13,7 +13,7 @@
 #include "llimits.h"
 #include "lua.h"
 
-
+//之所以用宏来实现这组 API ，是因为内存管理会被高频调用，而 luaM_reallocv这样API传入参数中经常出现常数，实现为宏可以保证常量计算在编译时进行。
 /*
 ** This macro reallocs a vector 'b' from 'on' to 'n' elements, where
 ** each element has size 'e'. In case of arithmetic overflow of the

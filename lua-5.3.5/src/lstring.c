@@ -37,6 +37,7 @@
 /*
 ** equality for long strings
 */
+//长字符串比较，长度和内存比较
 int luaS_eqlngstr (TString *a, TString *b) {
   size_t len = a->u.lnglen;
   lua_assert(a->tt == LUA_TLNGSTR && b->tt == LUA_TLNGSTR);
@@ -46,9 +47,13 @@ int luaS_eqlngstr (TString *a, TString *b) {
 }
 
 /* 计算字符串对应的hash值 */
+
+//小于32字节的每个字符都会参与hash运算，大于等于32字节的短字符串和
+//长字符串，则会至少跳过一个字节的方式进行hash运算，其计算方式也很简单(l >> 5) + 1。为了加快内部化的过程，计算长字符串哈希值是跳跃进行的
 unsigned int luaS_hash (const char *str, size_t l, unsigned int seed) {
   unsigned int h = seed ^ cast(unsigned int, l);
-  size_t step = (l >> LUAI_HASHLIMIT) + 1;
+  size_t step = (l >> LUAI_HASHLIMIT) + 1;/* if string is too long , don ' t hash all its chars */
+  //固定频率。字符串越长，步长越长
   for (; l >= step; l -= step)
     h ^= ((h<<5) + (h>>2) + cast_byte(str[l - 1]));
   return h;
@@ -56,6 +61,7 @@ unsigned int luaS_hash (const char *str, size_t l, unsigned int seed) {
 
 
 /* 计算长字符串对应的hash值 */
+//直到需要对字符串做键匹配时，才惰性计算hash值，加快以后的键比较过程
 unsigned int luaS_hashlongstr (TString *ts) {
   lua_assert(ts->tt == LUA_TLNGSTR);
   if (ts->extra == 0) {  /* no hash? */
@@ -98,7 +104,7 @@ void luaS_resize (lua_State *L, int newsize) {
       ** hash值为2和6的字符串都会存放在同一个桶中，桶号为2（从0开始）。那么在
       ** 新桶中，hash值为2和6的字符串分别会存放在桶2和桶0中，达到了重hash的效果。
       ** 2.当新桶的数量小于旧桶数量时，如新桶数量为4，旧桶数量为6则是上述过程的
-      ** 逆过程，即旧桶中桶2和桶6中的字符串都会存放在桶2中。
+      ** 逆过程，即旧桶中桶2和桶6中的字符串都会存放在桶2中。注意，桶数应该符合2的指数，128起
       */
       unsigned int h = lmod(p->hash, newsize);  /* new position */
 
@@ -168,6 +174,7 @@ void luaS_init (lua_State *L) {
 ** creates a new string object
 */
 /* 创建一个新的字符串对象，未填入具体的字符串内容，只是申请了内存空间 */
+//h参数，对于短字符为hash，对于长字符串为seed
 static TString *createstrobj (lua_State *L, size_t l, int tag, unsigned int h) {
   TString *ts;
   GCObject *o;
@@ -241,6 +248,7 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
   ** 如果处于待回收状态，那么就将其待回收状态撤销。
   */
   for (ts = *list; ts != NULL; ts = ts->u.hnext) {
+    //创建过程是需要比长度和内存对比，由于短字符串有且只有一份，后续比较只需要比较TString地址即可
     if (l == ts->shrlen &&
         (memcmp(str, getstr(ts), l * sizeof(char)) == 0)) {
       /* found! */
@@ -278,6 +286,7 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
 ** new string (with explicit length)
 */
 /* 创建一个字符串对象(显示指定长度) */
+//注意，有别于C的字符串，l是去掉'\0'的长度
 TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
   /* 判断是否是短字符串，如果是则调用internshrstr()创建 */
   if (l <= LUAI_MAXSHORTLEN)  /* short string? */
@@ -311,6 +320,8 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
 ** 否则创建一个新的字符串对象，并将该字符串对象存放在
 ** global_State的strcache[i]字符串数组中的第一个位置处。
 */
+
+//对已经保存在c层且需要频繁转换为TString的c层字符串非常有效率上的帮助。strcache内的字符串缓存保存一个gc周期，gc进入sweep阶段前清空
 TString *luaS_new (lua_State *L, const char *str) {
 
   /* 计算参数指定的字符串str对应的hash值，即在global_State的strcache的索引值 */

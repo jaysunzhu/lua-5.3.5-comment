@@ -31,7 +31,7 @@
 /*
 ** lua的指令都是32位定长的指令，指令的格式有四种，由i、A、B、C、Ax、Bx、sBx
 ** 这几个元素组合而成。解释如下：
-** iABC代表的指令格式是：opcode+A+B+C
+** iABC代表的指令格式是：低位 opcode+A+B+C 高位
 */
 enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 
@@ -146,7 +146,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 
 /* test whether value is a constant */
 /*
-** 判断这个数据的第八位是不是l ，如果是，则认为应该从常量数组中获取数据，
+** 判断这个数据的第八位是不是1 ，如果是，则认为应该从常量数组中获取数据，
 ** 否则就是从函数栈寄存器中获取数据
 */
 #define ISK(x)		((x) & BITRK)

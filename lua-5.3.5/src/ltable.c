@@ -43,7 +43,9 @@
 ** Maximum size of array part (MAXASIZE) is 2^MAXABITS. MAXABITS is
 ** the largest integer such that MAXASIZE fits in an unsigned int.
 */
+//MAXABITS=31
 #define MAXABITS	cast_int(sizeof(int) * CHAR_BIT - 1)
+//MAXASIZE=2^31
 #define MAXASIZE	(1u << MAXABITS)
 
 /*
@@ -52,6 +54,7 @@
 ** maximum number of elements in a table, 2^MAXABITS + 2^MAXHBITS, still
 ** fits comfortably in an unsigned int.)
 */
+//MAXHBITS=30
 #define MAXHBITS	(MAXABITS - 1)
 
 
@@ -222,6 +225,7 @@ static unsigned int findindex (lua_State *L, Table *t, StkId key) {
       ** 如果以上条件均满足，那么进一步比较key的内容和Node节点中key的内容是否相等，
       ** 如果相等，那么也当作是找到了对应的节点，也会计算出下标，并返回。
       */
+      //死键在 rehash 后会从哈希表中清除，而不添加新键就不会 rehash 表而导致死键消失。在这个前提下，遍历 table 是安全的
       if (luaV_rawequalobj(gkey(n), key) ||
             (ttisdeadkey(gkey(n)) && iscollectable(key) &&
              deadvalue(gkey(n)) == gcvalue(key))) {
@@ -257,10 +261,11 @@ static unsigned int findindex (lua_State *L, Table *t, StkId key) {
 
 /*
 ** 外层通过调用luaH_next()接口就可以得到当前key对应的元素值和下一个key对应的索引。
-** 在lunH_next()实现中，之所以将key对应的value保存在了紧跟在key之后的内存中，是因为
+** 在luaH_next()实现中，之所以将key对应的value保存在了紧跟在key之后的内存中，是因为
 ** 外层在调用luaH_next()的时候，就已经为其在key对象之后预留了一个TValue大小的内存
 ** 用于存放获取到的具体内容。外层调用可以参考lua_next()。
 */
+//在 Lua 中，并没有提供一个自维护状态的迭代器。而是给出了一个 next 方法。传入一个键，下一个键值对入栈。当传入的key值是nil值时，将1和array数组的第一个值入栈
 int luaH_next (lua_State *L, Table *t, StkId key) {
 
   /* 找出key对象在lua表中的索引，详细见findindex()的注解 */
@@ -310,6 +315,8 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
 ** integer keys in the table and leaves with the number of keys that
 ** will go to the array part; return the optimal size.
 */
+//'pna' enters with the total number of integer keys in the table
+// ‘optimal’ optimal的array部分大小
 static unsigned int computesizes (unsigned int nums[], unsigned int *pna) {
   int i;
   unsigned int twotoi;  /* 2^i (candidate for optimal size) */
@@ -429,7 +436,7 @@ static void setnodevector (lua_State *L, Table *t, unsigned int size) {
     /* lsize是将size对2取对数后的结果，故通过lsize求size时
     ** 只要将1左移lsize个位就可以了
     */
-    size = twoto(lsize);
+    size = twoto(lsize);//更新后的size比形参的size要大或者相等，向上取整到2^n
 
     /* 为散列数组申请内存 */
     t->node = luaM_newvector(L, size, Node);
@@ -484,15 +491,18 @@ void luaH_resize (lua_State *L, Table *t, unsigned int nasize,
   asn.t = t; asn.nhsize = nhsize;
 
   /* 重新为lua表中申请散列数组 */
+  //hashmap是重新申请malloc，而array是realloc
   if (luaD_rawrunprotected(L, auxsetnode, &asn) != LUA_OK) {  /* mem. error? */
     setarrayvector(L, t, oldasize);  /* array back to its original size */
     luaD_throw(L, LUA_ERRMEM);  /* rethrow memory error */
   }
 
 	/* 如果参数指定的数组大小小于数组的原始大小，那么就对数组部分进行缩容 */
+  
   if (nasize < oldasize) {  /* array part must shrink? */
     t->sizearray = nasize;
     /* re-insert elements from vanishing slice */
+    //数组部分缩容，会将数据从array部分放到hashmap部分
     for (i=nasize; i<oldasize; i++) {
       if (!ttisnil(&t->array[i]))
         luaH_setint(L, t, i + 1, &t->array[i]);
@@ -508,6 +518,7 @@ void luaH_resize (lua_State *L, Table *t, unsigned int nasize,
     if (!ttisnil(gval(old))) {
       /* doesn't need barrier/invalidate cache, as entry was
          already present in the table */
+      //如果是key 为int，如果符合新的array大小，就进入array，否则进入hashmap。非int的key，就进入hashmap
       setobjt2t(L, luaH_set(L, t, gkey(old)), gval(old));
     }
   }
@@ -539,18 +550,19 @@ void luaH_resizearray (lua_State *L, Table *t, unsigned int nasize) {
 ** (5) 根据上面计算得到的调整后的数组和散列桶大小调整表（ resize 函数）。
 */
 static void rehash (lua_State *L, Table *t, const TValue *ek) {
-  unsigned int asize;  /* optimal size for array part */
-  unsigned int na;  /* number of keys in the array part */
-  unsigned int nums[MAXABITS + 1];
+  unsigned int asize;  /* optimal size for array part */ //最终数组的大小(一定为2的次幂)
+  unsigned int na;  /* number of keys in the array part */ //最终归入数组部分的key的个数
+  unsigned int nums[MAXABITS + 1];//它的第i个位置存储的是key在2^(i-1)~2^i区间内的数量
   int i;
-  int totaluse;
+  int totaluse; //总共的key个数
   for (i = 0; i <= MAXABITS; i++) nums[i] = 0;  /* reset counts */
+  
   na = numusearray(t, nums);  /* count keys in array part */
   totaluse = na;  /* all those keys are integer keys */
   totaluse += numusehash(t, nums, &na);  /* count keys in hash part */
-  /* count extra key */
-  na += countint(ek, nums);
-  totaluse++;
+  na += countint(ek, nums);/* count extra key */
+  totaluse++;/* count extra key */
+  
   /* compute new size for array part */
   asize = computesizes(nums, &na);
   /* resize the table to new computed sizes */
@@ -645,6 +657,8 @@ TValue *luaH_newkey (lua_State *L, Table *t, const TValue *key) {
   ** 如果key对象所在的mainposition已经有数据了， 那么需要为这个新的key对象
   ** 分配新的Node节点，
   */
+  // 如果hash[mainposition]这个node的value值不为nil，需要分两种情况处理，可以参考下文
+  // https://manistein.github.io/blog/post/program/let-us-build-a-lua-interpreter/%E6%9E%84%E5%BB%BAlua%E8%A7%A3%E9%87%8A%E5%99%A8part4/#table%E5%80%BC%E7%9A%84%E6%9B%B4%E6%96%B0%E4%B8%8E%E6%8F%92%E5%85%A5
   if (!ttisnil(gval(mp)) || isdummy(t)) {  /* main position is taken? */
     Node *othern;
 
@@ -669,9 +683,9 @@ TValue *luaH_newkey (lua_State *L, Table *t, const TValue *key) {
     */
     othern = mainposition(t, gkey(mp));
 
-    /* ***这部分还需要回过头来看*** */
     if (othern != mp) {  /* is colliding node out of its main position? */
       /* yes; move colliding node into free position */
+      //占用节点的hash值与newkey不同，说明该节点是被“挤”到该位置来的，那么把该节点挪到freepos去，然后让newkey入住其mainposition。
       while (othern + gnext(othern) != mp)  /* find previous */
         othern += gnext(othern);
       gnext(othern) = cast_int(f - othern);  /* rechain to point to 'f' */
@@ -684,7 +698,7 @@ TValue *luaH_newkey (lua_State *L, Table *t, const TValue *key) {
     }
     else {  /* colliding node is in its own main position */
       /* new node will go into free position */
-
+      //占用的节点和newkey的哈希值相同，那么新节点直接插入到该mainposition的next，先临时占用别的节点
 			/*
 			** gnext(mp) != 0 说明所在mainposition除了首个Node节点之外还有其他Node节点，
 			** 由于新分配的节点会被当作第二个Node节点，所以这里需要当新分配的Node节点的
@@ -727,6 +741,7 @@ const TValue *luaH_getint (Table *t, lua_Integer key) {
   else {
     Node *n = hashint(t, key);
     for (;;) {  /* check whether 'key' is somewhere in the chain */
+      //由于hash冲突，所以必须对TKey的类型和数值进行检查
       if (ttisinteger(gkey(n)) && ivalue(gkey(n)) == key)
         return gval(n);  /* that's it */
       else {
@@ -759,7 +774,7 @@ const TValue *luaH_getshortstr (Table *t, TString *key) {
   */
   for (;;) {  /* check whether 'key' is somewhere in the chain */
     const TValue *k = gkey(n);
-    if (ttisshrstring(k) && eqshrstr(tsvalue(k), key))
+    if (ttisshrstring(k) && eqshrstr(tsvalue(k), key))//直接对比内存地址，不需要逐字节对比
       return gval(n);  /* that's it */
     else {
       int nx = gnext(n);

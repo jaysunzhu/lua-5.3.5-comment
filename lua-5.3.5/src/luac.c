@@ -301,8 +301,11 @@ static void PrintCode(const Proto* f)
   int sbx=GETARG_sBx(i);
   int line=getfuncline(f,pc);
   printf("\t%d\t",pc+1);
+  //输出指令对应Lua源码行号
   if (line>0) printf("[%d]\t",line); else printf("[-]\t");
+  //输出指令名
   printf("%-9s\t",luaP_opnames[o]);
+  //输出指令参数(寄存器或者常量偏移)
   switch (getOpMode(o))
   {
    case iABC:
@@ -322,6 +325,7 @@ static void PrintCode(const Proto* f)
     printf("%d",MYK(ax));
     break;
   }
+  //输出指令参数(对应的地址或者数值)
   switch (o)
   {
    case OP_LOADK:

@@ -35,7 +35,7 @@ LClosure *luaF_newLclosure (lua_State *L, int n) {
   LClosure *c = gco2lcl(o);
   c->p = NULL;
   c->nupvalues = cast_byte(n);
-  while (n--) c->upvals[n] = NULL;
+  while (n--) c->upvals[n] = NULL;//构造闭包对象时，Upval指针为NULL
   return c;
 }
 
