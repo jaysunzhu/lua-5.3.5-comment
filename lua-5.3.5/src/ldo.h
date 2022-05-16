@@ -28,7 +28,16 @@
 #define luaD_checkstack(L,n)	luaD_checkstackaux(L,n,(void)0,(void)0)
 
 
-
+///top和stack的差（按照字节差，而非sizeof(类型)差）或者ci.top或者ci.fun和stack的差
+// typedef struct st
+// {
+//     char array[10];//
+//     double d;//
+// } st;
+// st stArray[11];
+// ptrdiff_t d1 = &stArray[10] -  &stArray[0];
+// ptrdiff_t d2 = (char*)&stArray[10] - (char*)&stArray[0];
+// printf("sizeof:%d,%d,%d\n",sizeof(st), d1,d2); //sizeof:24,10,240
 #define savestack(L,p)		((char *)(p) - (char *)L->stack)
 #define restorestack(L,n)	((TValue *)((char *)L->stack + (n)))
 

@@ -141,6 +141,8 @@ struct GCObject {
 ** lua中的数据分为值类型和引用类型，引用类型需要有GC来维护其生命周期，Value中的gc成员则
 ** 代表了所有的引用类型；Value中的其余成员就是值类型，直接存放在Value中，
 */
+// Lua 中的数据可以这样分为两类：值类型和引用类型。值类型可以被任意复制，而引用类型共享一份数
+// 据，由 GC 负责维护生命期
 typedef union Value {
   GCObject *gc;    /* collectable objects */
   void *p;         /* light userdata */
@@ -329,7 +331,7 @@ typedef struct lua_TValue {
 #define setdeadvalue(obj)	settt_(obj, LUA_TDEADKEY)
 
 
-
+/* from stack to (same) stack */
 #define setobj(L,obj1,obj2) \
 	{ TValue *io1=(obj1); *io1 = *(obj2); \
 	  (void)L; checkliveness(L,io1); }

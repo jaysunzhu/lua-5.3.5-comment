@@ -90,7 +90,8 @@ typedef struct lua_State lua_State;
 #define LUA_NUMTAGS		9
 
 
-
+//Lua 供 C 使用的栈相关 API 都是不检查数据栈越界的，这是因为通常我们编写 C 扩展都能把数据栈空
+// 间的使用控制在 LUA_MINSTACK 以内，或是显式扩展。对每次数据栈访问都强制做越界检查是非常低效的
 /* minimum Lua stack available to a C function */
 #define LUA_MINSTACK	20
 

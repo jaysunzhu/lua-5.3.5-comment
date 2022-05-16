@@ -50,12 +50,22 @@
 ** C++ code, with _longjmp/_setjmp when asked to use them, and with
 ** longjmp/setjmp otherwise.
 */
+
+// 如果 Lua 被实现为一个纯粹的运行在字节码虚拟机上的语言，只要不出虚拟机，可以很容易的实现自
+// 己的线程和异常处理。事实上，Lua 函数调用层次上只要没有 C 函数，是不会在 C 层面的调用栈上深入下
+// 去的 。但当 Lua 函数调用了 C 函数，而这个 C 函数中又进一步的回调了 Lua 函数，这个问题就复杂的
+// 多。考虑一下 LUA 中的 PAIRS 函数，就是一个典型的 C 扩展函数，却又回调了 Lua 函数。
+// Lua 底层把异常和线程中断用同一种机制来处理，也就是使用了 C 语言标准的 longjmp 机制来解决这个
+// 问题。
+// 为了兼顾 C++ 开发，在 C++ 环境下，可以把它配置为使用 C++ 的 try/catch 机制
+// 在 C 环境下，_longjmp和_setjmp 机制
 #if !defined(LUAI_THROW)				/* { */
 
 #if defined(__cplusplus) && !defined(LUA_USE_LONGJMP)	/* { */
 
 /* C++ exceptions */
 #define LUAI_THROW(L,c)		throw(c)
+//catch处理函数由于没有新throw，函数catch后继续运行，不会再中断
 #define LUAI_TRY(L,c,a) \
 	try { a } catch(...) { if ((c)->status == 0) (c)->status = -1; }
 #define luai_jmpbuf		int  /* dummy variable */
@@ -91,9 +101,11 @@ struct lua_longjmp {
   */
   struct lua_longjmp *previous;
   /* 异常处理机制相关的东西，如对于C来说，一般是jmp_buf类型 */
+  //C setjump使用
   luai_jmpbuf b;
   
   /* 受保护代码运行出错的错误码 */
+  //C++ try catch中使用
   volatile int status;  /* error code */
 };
 
@@ -236,14 +248,18 @@ int luaD_rawrunprotected (lua_State *L, Pfunc f, void *ud) {
 ** 根据旧栈和新栈的地址差来校正线程状态信息lua_State中某些信息的地址。
 ** oldstack指向的是旧栈的起始地址。
 */
+//修正的位置包括 upvalue以及执行栈(调用栈)对数据栈的引用
 static void correctstack (lua_State *L, TValue *oldstack) {
   CallInfo *ci;
   UpVal *up;
   
   /* 新栈的栈指针 */
+  //stack top指针调整
   L->top = (L->top - oldstack) + L->stack;
+  //upvalue
   for (up = L->openupval; up != NULL; up = up->u.open.next)
     up->v = (up->v - oldstack) + L->stack;
+  //执行栈(调用栈)对数据栈的引用
   for (ci = L->ci; ci != NULL; ci = ci->previous) {
     ci->top = (ci->top - oldstack) + L->stack;
     ci->func = (ci->func - oldstack) + L->stack;
@@ -599,8 +615,9 @@ int luaD_poscall (lua_State *L, CallInfo *ci, StkId firstResult, int nres) {
   return moveresults(L, firstResult, res, nres, wanted);
 }
 
-
 /* next_ci()宏用于进入一个新的函数调用栈，函数调用层次变深。 */
+// 调用者只需要把 CallInfo 链表当成一个无限长的堆栈使用即可。当调用层次返回，之前分配
+// 的节点可以被后续调用行为复用。在 GC 的时候只需要调用 LuaE_freeCI 就可以所有的链表
 #define next_ci(L) (L->ci = (L->ci->next ? L->ci->next : luaE_extendCI(L)))
 
 
@@ -1144,6 +1161,7 @@ LUA_API int lua_yieldk (lua_State *L, int nresults, lua_KContext ctx,
 ** 受保护模式的代码调用流程：luaD_pcall以受保护模式调用func，func则会从栈中取出真正要执行的函数调用。
 ** 参数u存放的就是真正要执行的函数调用的信息。
 */
+//old_top,下面即将在函数func中执行的函数调用在栈中的位置（是相对于整个虚拟栈起始地址的下标，不是地址）
 int luaD_pcall (lua_State *L, Pfunc func, void *u,
                 ptrdiff_t old_top, ptrdiff_t ef) {
   int status;
@@ -1170,9 +1188,10 @@ int luaD_pcall (lua_State *L, Pfunc func, void *u,
     ** func可以参考f_call()
     */
     StkId oldtop = restorestack(L, old_top);
+    //对upvalue进行open转close
     luaF_close(L, oldtop);  /* close possible pending closures */
   
-    /* 将错误码status对应的错误信息设置到出错函数所在的栈单元中。 */
+    /* 将错误码status对应的错误信息设置到stack的top中。 */
     seterrorobj(L, status, oldtop);
 
     /* 恢复上一次函数调用的信息。 */

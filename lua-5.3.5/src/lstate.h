@@ -108,6 +108,8 @@ typedef struct stringtable {
 ** 整个CallInfo链表会在运行中被反复复用。直到GC的时候才清理那些比当前调用层次
 ** 更深的无用节点。
 */
+//调用栈，双向链表的形式储存在线程对象,不直接被 GC 模块管理.整个 CallInfo 链表会在
+// 运行中被反复复用。直到 GC 的时候才清理那些比当前调用层次更深的无用节点
 typedef struct CallInfo {
   /* func指向的是该函数调用对应的Closure对象 */
   StkId func;  /* function index in the stack */
@@ -128,6 +130,7 @@ typedef struct CallInfo {
       ** 在函数栈中，函数的形参和内部定义的本地变量对应函数栈中的哪个栈单元都是在指令解析过程中
       ** 就确定好了的。函数的实参是在调用函数之前需要先在函数栈中设置好。可以参考handle_script()。
       */
+     //如果当前是一个 Lua 函数，且传入的参数个数不定的时候，需要用这个位置和当前数据栈底的位置相减，获得不定参数的准确数量
       StkId base;  /* base for this function */
 
       /* 
@@ -160,6 +163,7 @@ typedef struct CallInfo {
   short nresults;  /* expected number of results from this function */
 
   /* 函数调用的状态 */
+  //  callstatus 中保存了一位标志用来区分是 C 函数还是 Lua 函数
   unsigned short callstatus;
 } CallInfo;
 
@@ -189,6 +193,7 @@ typedef struct CallInfo {
 ** 'global state', shared by all threads of this state
 */
 /* Lua虚拟机中所有thread共享的全局状态信息 */
+// 同一 Lua 虚拟机中的所有执行线程，共享了一块全局数据 global_State
 typedef struct global_State {
   /* frealloc指定lua中用于申请内存的函数 */
   lua_Alloc frealloc;  /* function to reallocate memory */
@@ -301,6 +306,9 @@ struct lua_State {
   ** 因此ci指向的双向链表的每一个CallInfo节点代表的就是一层函数调用。但有一点不变，就是L->ci指向的
   ** 始终是函数调用链中当前正在执行的函数调用对应的CallInfo节点。
   */
+//  遍历 L 中的 ci 域指向的 CallInfo 链表可以获得完整的 Lua 调用链。而每一级的 CallInfo 中，
+// 都可以进一步的通过 func 域取得所在函数的更详细信息。当 func 为一个 Lua 函数时，根据它的函数原型可
+// 以获得源文件名、行号等诸多调试信息
   CallInfo *ci;  /* call info for current function */
 
   /*
