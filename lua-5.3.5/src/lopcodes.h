@@ -31,7 +31,8 @@
 /*
 ** lua的指令都是32位定长的指令，指令的格式有四种，由i、A、B、C、Ax、Bx、sBx
 ** 这几个元素组合而成。解释如下：
-** iABC代表的指令格式是：低位 opcode+A+B+C 高位
+** iABC代表的指令格式是：低位 opcode(6)+A(8)+B(9)+C(9) 高位
+*                     高位 C(9)+B(9)+A(8)+opcode(6) 低位
 */
 enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 
@@ -84,6 +85,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 
 
 /* creates a mask with 'n' 1 bits at position 'p' */
+//eg MASK1(2,1) 即二进制0110，十进制6 
 #define MASK1(n,p)	((~((~(Instruction)0)<<(n)))<<(p))
 
 /* creates a mask with 'n' 0 bits at position 'p' */

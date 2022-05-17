@@ -531,6 +531,8 @@ static void tryfuncTM (lua_State *L, StkId func) {
 ** 了，因此将函数返回值移动到函数指针所在位置开始依次往后存放。在该函数最后，
 ** 会更新栈指针L->top，使其指向挪动后的最后一个返回值的下一个栈单元。
 */
+//nres是被调用函数实际返回值个数，wanted是调用函数预期的返回值
+//res就是被调用函数func对应的slot
 static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
                                       int nres, int wanted) {
   switch (wanted) {  /* handle typical cases separately */
@@ -546,6 +548,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       setobjs2s(L, res, firstResult);  /* move it to proper place */
       break;
     }
+    // LUA_MULTRET = -1，已实际放回结果为准
     case LUA_MULTRET: {
       int i;
       /* 如果有多个返回值，则从res指向的位置开始，依次往后面存放，同时更新栈指针L->top */
@@ -560,7 +563,6 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       ** 如果实际返回值个数多于期望的返回值个数，那么只将期望的返回值挪到指定位置，
       ** 实际返回值中多余的那部分就直接丢弃了；如果实际的返回值个数少于期望的返回值
       ** 个数，那么将实际返回值先挪到指定位置，缺少的那部分返回值都用nil对象来填充。
-      ** 最后，更新栈指针L->top，使其指向最后一个返回值的下一个栈单元。
       */
       if (wanted <= nres) {  /* enough results? */
         for (i = 0; i < wanted; i++)  /* move wanted results to correct place */
@@ -716,6 +718,7 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       ** 将结果挪到从函数对象所在栈单元开始依次存放。函数的参数是调用该函数的地方负责压入到函数
       ** 后面的，负责准备好的。
       */
+       //以math_abs为例，n就是告知放入stack中返回参数个数
       n = (*f)(L);  /* do the actual call */
       lua_lock(L);
       api_checknelems(L, n);
