@@ -130,7 +130,7 @@ CallInfo *luaE_extendCI (lua_State *L) {
   /* 创建一个CallInfo对象 */
   CallInfo *ci = luaM_new(L, CallInfo);
   lua_assert(L->ci->next == NULL);
-  L->ci->next = ci;
+  L->ci->next = ci;//插入到尾部
   ci->previous = L->ci;
   ci->next = NULL;
   

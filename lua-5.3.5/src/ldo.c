@@ -105,7 +105,7 @@ struct lua_longjmp {
   luai_jmpbuf b;
   
   /* 受保护代码运行出错的错误码 */
-  //C++ try catch中使用
+  //参考 thread status 状态
   volatile int status;  /* error code */
 };
 
@@ -158,6 +158,10 @@ l_noret luaD_throw (lua_State *L, int errcode) {
     ** 最后一次设置的返回点。如果主线程中也没有设置异常处理函数，则先判断全局状态信息中是否设置了
     ** panic()函数，如果设置了的话，还有机会在panic()处理错误并跳出异常；否则进程会调用abort()退出。
     */
+
+    //考虑到新构造的线程可能在不受保护的情况下运行。这时的任何错误都必须被捕获，不能让程序崩溃。
+    //这种情况合理的处理方式就是把正在运行的线程标记为死线程，并且在主线程中抛出异常
+    //这一般是错误的使用 Lua 导致的。正确使用 Lua 线程的方式是把主函数压入新线程，然后调用 lua_resume 启动它。而 lua_resume 可以保护线程的主函数运行
     global_State *g = G(L);
     L->status = cast_byte(errcode);  /* mark it as dead */
     if (g->mainthread->errorJmp) {  /* main thread has a handler? */
@@ -451,19 +455,27 @@ static void callhook (lua_State *L, CallInfo *ci) {
 }
 
 
-/* 如果函数是可变参数的话，那么需要对参数做一个调整。actual是实际传递了的参数个数。 */
+//当一个函数接收变长参数时，这部分的参数是放在上一级数据栈帧尾部的。adjust_varargs
+//将需要个固定参数复制到被调用的函数的新一级数据栈帧上，而变长参数留在原地。
+//actual是实际传递了的参数个数
 static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
   int i;
   /* 固定参数的个数 */
   int nfixargs = p->numparams;
   StkId base, fixed;
-  /* move fixed parameters to final position */
+  
+  //first形参地址
   fixed = L->top - actual;  /* first fixed argument */
+  //修正后first形参地址
   base = L->top;  /* final position of first argument */
+  
+  /* move fixed parameters to final position */
+  //将固定参数的slot移动到L->top
   for (i = 0; i < nfixargs && i < actual; i++) {
     setobjs2s(L, L->top++, fixed + i);
     setnilvalue(fixed + i);  /* erase original copy (for GC) */
   }
+  //可变参函数形参不足情况，需要补nil
   for (; i < nfixargs; i++)
     setnilvalue(L->top++);  /* complete missing arguments */
   return base;
@@ -476,15 +488,14 @@ static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
 ** it. Raise an error if __call metafield is not a function.
 */
 /*
-** 有些对象是通过元表来驱动函数调用行为的。这个时候需要通过tryfuncTM()来找到真正的
-** 调用函数。在lua中，根据元方法进行的函数调用和普通的函数调用会有一定的区别，通过
+** 在lua中，根据元方法进行的函数调用和普通的函数调用会有一定的区别，通过
 ** 元方法进行的函数调用，需要将拥有该元方法的对象自身作为元方法的第一个参数，这个时候
 ** 就需要移动栈的内容，将对象插到第一个参数位置处。真正的调用函数就是元方法"__call"的值。
 ** tryfuncTM()参数中的func就是那个通过元表来驱动函数调用的对象。
 */
 static void tryfuncTM (lua_State *L, StkId func) {
   /*
-  ** 从func指向的TValue对象的元表中尝试获取TM_CALL对应的值对象。
+  ** 从func指向的TValue对象(Table\Userdata、基础类型等含有元方法)的元表中尝试获取TM_CALL对应的值对象。
   ** 意思就是说从func指向的TValue对象的元表中获取键值为"__call"的值对象。
   */
   const TValue *tm = luaT_gettmbyobj(L, func, TM_CALL);
@@ -644,6 +655,7 @@ int luaD_poscall (lua_State *L, CallInfo *ci, StkId firstResult, int nres) {
 ** lua虚拟机中执行；返回值为1，表示待执行函数是一个C函数，且该函数已经执行完了，
 ** 收尾工作也结束了。
 */
+//nresult则指定了，这个函数被期望返回多少个返回值
 int luaD_precall (lua_State *L, StkId func, int nresults) {
   lua_CFunction f;
   CallInfo *ci;
@@ -722,7 +734,9 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       ** 程序进入这个分支，说明lua中执行了那个函数调用时一个lua函数，这个时候需要做一些前期准备工作，
       ** lua函数执行是在虚拟机中的，即luaV_execute()。
       */
-      
+      //一般的 Lua 层面的函数调用并不对应一个 C 层面上函数调用行为。对于 Lua 函数而言，应该看成是生
+      // 成新的 CallInfo，修正数据栈，然后把字节码的执行位置跳转到被调用的函数开头。 而 Lua 函数的 return
+      // 操作则做了相反的操作，恢复数据栈，弹出 CallInfo ，修改字节码的执行位置，恢复到原有的执行序列上。参考LuaD_poscall
       StkId base;
 	  
       /* 获取待执行函数对应的原型信息 */
@@ -730,21 +744,25 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
 	
       /* 获取实际传递了的函数参数的个数 */
       int n = cast_int(L->top - func) - 1;  /* number of real arguments */
-         // nresults 期望返回参数
          
       /* 
-      ** 获取函数内部栈的大小，并做检查。在函数栈中，函数的形参和内部定义的本地变量对应函数栈
+      ** 获取函数内部栈的大小，并做检查。在函数栈中，函数的形参和内部定义的局部变量对应函数栈
       ** 中的哪个栈单元都是在指令解析过程中就确定好了的。函数的实参是在调用函数之前需要先在
       ** 函数栈中设置好。可以参考handle_script()。
       */
       int fsize = p->maxstacksize;  /* frame size */
+
+// Lua 函数整体所需要的栈空间是在生成字节码时就已知的，所以可以用
+// checkstackp 一次性分配好
+         //数据栈检查和增长
       checkstackp(L, fsize, func);
 
       /* 判断函数是不是可变参函数 */
       if (p->is_vararg)
+        //可变参参数修正过程
         base = adjust_varargs(L, p, n);
       else {  /* non vararg function */
-
+        //固定参数修正过程
         /* 将此次函数调用过程中没有传递实参的参数，赋予nil值 */
         for (; n < p->numparams; n++)
           setnilvalue(L->top++);  /* complete missing arguments */
@@ -759,18 +777,15 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       ci->func = func;
       ci->u.l.base = base;
 	  
-      /* 注意到此时整个虚拟栈的栈指针和当前函数调用的栈指针是一样的。 */
+      //top和base相差frame size，具体定义看maxstacksize
       L->top = ci->top = base + fsize;
 
-      /*
-      ** 在准备工作中，[base, ci->top)这部分栈单元就是函数内的栈。在函数栈中，函数的形参和
-      ** 内部定义的本地变量对应函数栈中的哪个栈单元都是在指令解析过程中就确定好了的。函数的
-      ** 实参是在调用函数之前需要先在函数栈中设置好。可以参考handle_script()。
-      */
 	  
       lua_assert(ci->top <= L->stack_last);
+
+         //初始化字节码执行指针 savedpc ，将其指向 函数原型 中的字节指令区
       ci->u.l.savedpc = p->code;  /* starting point */
-	  /* 标记是lua函数 */
+	
       ci->callstatus = CIST_LUA;
 
       /* 如果注册了函数调用事件对应的钩子函数，那么就触发钩子函数的调用 */
@@ -781,12 +796,7 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       return 0;
     }
     default: {  /* not a function */
-      /*
-      ** 有些对象是通过元表来驱动函数调用行为的。这个时候需要通过tryfuncTM()来找到真正的
-      ** 调用函数。在lua中，根据元方法进行的函数调用和普通的函数调用会有一定的区别，通过
-      ** 元方法进行的函数调用，需要将拥有该元方法的对象自身作为元方法的第一个参数，这个时候
-      ** 就需要移动栈的内容，将对象插到第一个参数位置处。真正的调用函数就是元方法"__get"的值。
-	  */
+
       checkstackp(L, 1, func);  /* ensure space for metamethod */
 	  
       tryfuncTM(L, func);  /* try to get '__call' metamethod */
@@ -1174,6 +1184,7 @@ int luaD_pcall (lua_State *L, Pfunc func, void *u,
   ** 开启一个新的函数调用，因此这里先将当前的函数调用信息保存下来，以便执行完
   ** 新的函数调用之后进行恢复，继续上次的执行。
   */
+  //用 C 层面的堆栈来保存和恢复状态
   CallInfo *old_ci = L->ci;
   
   /* 同时也保存当前lua线程中一些需要保存的东西 */
@@ -1191,6 +1202,8 @@ int luaD_pcall (lua_State *L, Pfunc func, void *u,
     ** 恢复在保护模式下运行的函数在栈中的地址，注意这个函数不是func，而是func中触发执行的函数调用。
     ** func可以参考f_call()
     */
+    //因为 luaD_rawrunprotected 调用的是一个函数对象，而不是数据栈上的索引，这就需要额外的变量来
+    //定位了
     StkId oldtop = restorestack(L, old_top);
     //对upvalue进行open转close
     luaF_close(L, oldtop);  /* close possible pending closures */

@@ -531,20 +531,24 @@ typedef struct LocVar {
 ** Proto结构体用于存放函数的原型信息
 ** 注意，整个lua代码文件解析完成之后，也是生成这么一个Proto的对象，即整个代码文件也当做是一个函数。
 */
+//使用https://www.luac.nl/s/14fbea26ac382adff23862142a(最佳)或者luac查看原型
 typedef struct Proto {
   CommonHeader;
 
   /* 函数原型中固定参数的数量 */
   lu_byte numparams;  /* number of fixed parameters */
-  lu_byte is_vararg;  /* 该函数是不是可变参数的 */
+  /* 该函数是不是可变参数的 */
+  lu_byte is_vararg;  
 
-  /* 该函数所需要的函数栈的大小，函数的栈中会存放函数参数，函数内部定义的本地变量等。 */
+  /* 该函数所需要的函数栈的大小，函数的栈中会存放函数参数，函数内部定义的局部变量等。 */
+  //slot数量，包含了固定参数、局部变量。空函数情况下为2
   lu_byte maxstacksize;  /* number of registers needed by this function */
 
-  /* Upvaldesc *upvalues数组的大小，即函数对应的自由变量的个数。 */
+  /* Upvaldesc *upvalues数组的大小，即函数对应的Upvalue的个数。 */
   int sizeupvalues;  /* size of 'upvalues' */
 
   /* TValue *k数组的大小 */
+  //常量个数
   int sizek;  /* size of 'k' */
 
   /* 字节码占用的数组大小 */
@@ -553,10 +557,13 @@ typedef struct Proto {
   int sizelineinfo;
 
   /* struct Proto **p指针数组的大小 */
+  //该函数（原型）内定义了函数的的数量
   int sizep;  /* size of 'p' */
 
   /* LocVar *locvars数组的大小 */
+  //包含局部变量和参数
   int sizelocvars;
+  
   int linedefined;  /* debug information  */
   int lastlinedefined;  /* debug information  */
 

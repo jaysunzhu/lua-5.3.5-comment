@@ -5,15 +5,15 @@
 | lua.h | lua_ 		| C 语言接口 |供外部程序使用的 API 则使用 lua_ 的命名风格													|
 | lctype | 无 | C标准库中ctype相关实现 | 'ctype' functions for Lua |
 | ldebug 	| luaG_ 	| Debug接口 	| Debug Interface 											|
-| ldo 		| luaD_ 	| 函数调用以及栈管理 		| Stack and Call structure of Lua				 			|
+| ldo 		| luaD_(Do) | 函数调用以及栈管理 		| Stack and Call structure of Lua				 			|
 | lfunc 	| luaF_ 	| 函数原型及闭包管理 	| Auxiliary functions to manipulate prototypes and closures |
-| lgc 		| luaC_ 	| lgc.c  		| Garbage Collector 										|
+| lgc 		| luaC_ 	| 垃圾回收  		| Garbage Collector 										|
 | lmem 		| luaM_ 	| 内存管理接口 		| Interface to Memory Manager 								|
 | lobject 	| luaO_ 	| 对象操作的一些函数 	| Type definitions for Lua objects 							|
 | lopcodes 	| luaP_ 	| 虚拟机的字节码定义 	| Opcodes for Lua virtual machine 							|
 | lstate 	| luaE_ 	| 全局状态机 	|Global State												|
 | lstring 	| luaS_ 	| 字符串池 	|String table (keep all strings handled by Lua)				|
-| ltable 	| luaH_（Hash ） | 表类型的相关操作 	|Lua tables (hash)											|
+| ltable 	| luaH_(Hash) | 表类型的相关操作 	|Lua tables (hash)											|
 | ltm 		| luaT_ 	| 元方法 		|Tag methods												|
 | lvm 		| luaV_ 	| 虚拟机 		|Lua virtual machine										|
 | lzio 		| luaZ_ 	| 输入流接口  		|Buffered streams											|
@@ -36,7 +36,7 @@
 | lbitlib | 无 | 位操作库 | Standard library for bitwise operations |
 | lcorolib 	| luaB_ 	| 协程库 	| Coroutine Library 										|
 | ldblib | db_ | Debug 库 | Interface from Lua to its debug API |
-| linit 	| luaL_ 	| linit 	| Initialization of libraries for lua.c and other clients 	|
+| linit 	| luaL_ 	| 内嵌库的初始化 | Initialization of libraries for lua.c and other clients 	|
 | liolib | f_ 和 io_ | IO 库 | Standard I/O (and system) library |
 | llimits | 无 | 一些类型和限制定义 | Limits, basic types, and some other 'installation-dependent' definitions |
 | lmathlib | math_ | 数学库 | Standard mathematical library |
