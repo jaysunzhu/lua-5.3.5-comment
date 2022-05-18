@@ -372,14 +372,8 @@ void luaD_inctop (lua_State *L) {
 ** function, can be changed asynchronously by signals.)
 */
 /*
-** Lua的hook机制，可以在程序触发了某些事件的时候，调用我们注册的一个钩子函数。可以触发
-** hook机制的事件目前有以下几个：
-** call事件： 调用了一个函数的时候
-** return事件：函数返回
-** line事件：开始执行新的一行代码
-** count事件：执行的指令数达到指定的数量
-** 引起钩子函数调用的事件及其掩码在lua.h中定义。
-** 为给定的事件调用钩子函数。事件由参数event指定。
+** Lua的hook机制，可以在程序触发了某些事件的时候，调用我们注册的一个钩子函数
+event参考：Event codes
 */
 void luaD_hook (lua_State *L, int event, int line) {
   /* 获取注册的钩子函数 */
@@ -1036,7 +1030,9 @@ static void resume (lua_State *L, void *ud) {
     */
     ci->func = restorestack(L, ci->extra);
 
-    /* 如果被中断的函数调用是一个lua函数，则在虚拟机中继续执行该函数调用 */
+    //钩子函数是一个特殊情况，它是一个 C 函数，却看起来在 Lua 中。这时从 Callinfo 中的 extra 取出上次运行到的函数，
+    // 可以识别出这个情况。 当它是一个 Lua 调用，那么必然是从钩子函数中切出的，不会有被打断的虚拟机指
+    // 令，直接通过 LuaV_execute 继续它的字节码解析执行流程
     if (isLua(ci))  /* yielded inside a hook? */
       luaV_execute(L);  /* just continue running Lua code */
     else {  /* 'common' yield */
@@ -1053,6 +1049,8 @@ static void resume (lua_State *L, void *ud) {
         api_checknelems(L, n);
         firstArg = L->top - n;  /* yield results come from continuation */
       }
+
+      //C 函数，按照延续点的约定，调用延续点 k ，之后经过 luaD_poscall 完成这次调用
       luaD_poscall(L, ci, firstArg, n);  /* finish 'luaD_precall' */
     }
 
@@ -1061,7 +1059,7 @@ static void resume (lua_State *L, void *ud) {
   }
 }
 
-/* resume操作的辅助函数，L是协程，from是调用协程的线程 */
+/* resume操作的辅助函数，L是协程，from是调用协程的线程（常见是主线程） */
 LUA_API int lua_resume (lua_State *L, lua_State *from, int nargs) {
   int status;
 
@@ -1075,6 +1073,7 @@ LUA_API int lua_resume (lua_State *L, lua_State *from, int nargs) {
   if (L->status == LUA_OK) {  /* may be starting a coroutine */
     if (L->ci != &L->base_ci)  /* not in base level? */
       return resume_error(L, "cannot resume non-suspended coroutine", nargs);
+    
   }
   else if (L->status != LUA_YIELD)
     /* 
@@ -1082,22 +1081,19 @@ LUA_API int lua_resume (lua_State *L, lua_State *from, int nargs) {
     ** 并将错误信息压入协程的栈顶部。
     */
     return resume_error(L, "cannot resume dead coroutine", nargs);
-
-  /* 程序执行到这里，协程的状态要么是LUA_OK或者LUA_YIELD。 */
-
+  
+  //create协程后，首次进入resume，故L->status == LUA_OK
+  //被yield后，L->status == LUA_YIELD
   L->nCcalls = (from) ? from->nCcalls + 1 : 1;
   if (L->nCcalls >= LUAI_MAXCCALLS)
     return resume_error(L, "C stack overflow", nargs);
   luai_userstateresume(L, nargs);
   L->nny = 0;  /* allow yields */
   api_checknelems(L, (L->status == LUA_OK) ? nargs + 1 : nargs);
-
-  /*
-  ** 以保护模式来调用resume()执行协程的resume操作。nargs是传递给resume()函数的参数个数，这个时候
-  ** 这些参数位于协程栈顶部。
-  */
+  
   status = luaD_rawrunprotected(L, resume, &nargs);
   if (status == -1)  /* error calling 'lua_resume'? */
+    //出现throw异常
     status = LUA_ERRRUN;
   else {  /* continue running after recoverable errors */
     while (errorstatus(status) && recover(L, status)) {
@@ -1134,6 +1130,7 @@ LUA_API int lua_yieldk (lua_State *L, int nresults, lua_KContext ctx,
   api_checknelems(L, nresults);
 
   /* 如果L->nny > 0，说明被中断的协程中有不可中断的函数调用，这时会报错。 */
+  //不是所有的 C 函数都可以正常恢复，只要调用层次上面有一个这样的 C 函数，yield 就无法正确工作。这是由 nny 的值来检测的
   if (L->nny > 0) {
     if (L != G(L)->mainthread)
       luaG_runerror(L, "attempt to yield across a C-call boundary");
@@ -1143,13 +1140,14 @@ LUA_API int lua_yieldk (lua_State *L, int nresults, lua_KContext ctx,
 
   /* 将当前的协程状态设置为LUA_YIELD，表示协程被中断 */
   L->status = LUA_YIELD;
-
-  /* 
-  ** 将当前正在执行的即将被中断的函数对象保存到函数调用信息的extra成员中，
-  ** 注意保存的不是具体的函数对象，而是函数对象相对于协程栈基址的偏移量。
-  */
+  
   ci->extra = savestack(L, ci->func);  /* save current 'func' */
   if (isLua(ci)) {  /* inside a hook? */
+    // lua_yieldk 是一个公开 API ，只用于给 Lua 程序编写 C 扩展模块使用。所以处于这个函数内部时，一定
+    // 处于一个 C 函数调用中。但钩子函数的运行是个例外。钩子函数本身是一个 C 函数，但是并不是通常正常
+    // 的 C API 调用进来的。在 Lua 函数中触发钩子会认为当前状态是处于 Lua 函数执行中。这个时候允许 畹畩略畬畤
+    // 线程，但无法正确的处理 C 层面的延续点。所以禁止传入延续点函数。而对于正常的 C 调用，允许修改延
+    // 续点 k 来改变执行流程    
     api_check(L, k == NULL, "hooks cannot continue after yielding");
   }
   else {

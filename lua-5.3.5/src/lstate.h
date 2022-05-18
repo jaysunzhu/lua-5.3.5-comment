@@ -157,9 +157,10 @@ typedef struct CallInfo {
   } u;
 
   /* 用于在yield操作时保存被中断函数相对于栈基址的偏移量，用以在resume操作时找到被中断的函数对象 */
+  //extra = savestack(L, ci->func)
   ptrdiff_t extra;
 
-  /* 函数调用返回值的数量 */
+  /* 函数调用 期望 返回值的数量 */
   short nresults;  /* expected number of results from this function */
 
   /* 函数调用的状态 */
@@ -277,6 +278,7 @@ struct lua_State {
   unsigned short nci;  /* number of items in 'ci' list */
 
   /* status存放的是thread的执行状态 */
+  //参考/* thread status */
   lu_byte status;
 
   /* 指向整个栈的栈顶位置（未存入有效数据） */
@@ -361,6 +363,7 @@ struct lua_State {
   int hookcount;
 
   /* 线程中不可中断的函数调用数 */
+  //nny = 0表示不可中断
   unsigned short nny;  /* number of non-yieldable calls in stack */
 
   /* 嵌套调用的函数的层数 */
@@ -370,6 +373,7 @@ struct lua_State {
   l_signalT hookmask;
 
   /* 线程允许执行钩子函数的标志位 */
+  //钩子功能内部参数，禁掉钩子的递归调用
   lu_byte allowhook;
 };
 

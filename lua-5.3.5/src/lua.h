@@ -127,6 +127,17 @@ typedef int (*lua_CFunction) (lua_State *L);
 /*
 ** Type for continuation functions
 */
+// Internally, Lua uses the C longjmp facility to yield a coroutine.
+// Therefore, if a C function foo calls an API function and this API function yields
+// (directly or indirectly by calling another function that yields),
+// Lua cannot return to foo any more, because the longjmp removes its frame from the C stack.
+//
+// To avoid this kind of problem, Lua raises an error whenever it tries to yield across an API call,
+// except for three functions: lua_yieldk, lua_callk, and lua_pcallk.
+// All those functions receive a continuation function (as a parameter named k) to continue execution after a yield.
+
+//lua_KFunction k 参考https://www.lua.org/manual/5.3/manual.html#4.7
+//TODO 没搞懂
 typedef int (*lua_KFunction) (lua_State *L, int status, lua_KContext ctx);
 
 

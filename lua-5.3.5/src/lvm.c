@@ -1253,13 +1253,18 @@ void luaV_execute (lua_State *L) {
       vmcase(OP_RETURN) {
         /* 获取return指令的B部分内容。 */
         int b = GETARG_B(i);
+
+        //closes any open upvalues
         if (cl->p->sizep > 0) luaF_close(L, base);
         /*
         ** 一般函数调用的最后一条语句是一条return语句，这条return语句会做一些收尾工作。
         ** 调用luaD_poscall()就是做一些收尾工作，比如将L->ci设置为上一层函数对应的函数
         ** 调用信息。如果函数有返回值，那么就将返回值挪到从函数对象开始的栈单元开始存放。
-        ** 如果return指令中的B部分不为0，则函数返回值个数为b-1。
         */
+
+        // If B is 1, there are no return values. If B is 2 or more, there are (B-1) return values, located in consecutive registers from R(A) onwards.
+        // If B is 0, the set of values range from R(A) to the top of the stack.
+        // If B is 0 then the previous instruction (which must be either OP_CALL or OP_VARARG ) would have set L->top to indicate how many values to return.
         b = luaD_poscall(L, ci, ra, (b != 0 ? b - 1 : cast_int(L->top - ra)));
         if (ci->callstatus & CIST_FRESH)  /* local 'ci' still from callee */
           return;  /* external invocation: return */

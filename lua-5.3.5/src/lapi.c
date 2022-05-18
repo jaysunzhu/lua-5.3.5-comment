@@ -137,10 +137,7 @@ LUA_API int lua_checkstack (lua_State *L, int n) {
   return res;
 }
 
-/*
-** 从from的栈中取最顶部的n个栈单元内容到to的栈中。即将from的栈顶部往下的n个元素移到to的栈上。
-** from的栈中会删除移动到to的栈中的这个几个元素。
-*/
+//从from的栈中取最顶部的n个栈单元内容到top的栈中
 LUA_API void lua_xmove (lua_State *from, lua_State *to, int n) {
   int i;
   if (from == to) return;
@@ -1208,6 +1205,7 @@ static void f_call (lua_State *L, void *ud) {
 /*
 ** 以保护模式来运行栈中的函数调用，其中待执行的函数指针可以由L->top - (nargs+1)得到
 */
+//lua_KFunction k 参考https://www.lua.org/manual/5.3/manual.html#4.7
 LUA_API int lua_pcallk (lua_State *L, int nargs, int nresults, int errfunc,
                         lua_KContext ctx, lua_KFunction k) {
   struct CallS c;

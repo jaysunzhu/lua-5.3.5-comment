@@ -30,6 +30,7 @@ static lua_State *getco (lua_State *L) {
 ** 那么在auxresume()函数中会将错误信息压入栈顶；当resume操作成功时，auxresume()函数的返回值大于0，
 ** 在auxresume()函数中也会将resume操作的返回值（可能有多个）依次压入栈顶部。
 */
+//L是maintheard，co是协程线程
 static int auxresume (lua_State *L, lua_State *co, int narg) {
   int status;
   

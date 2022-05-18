@@ -415,7 +415,6 @@ static int finishpcall (lua_State *L, int status, lua_KContext extra) {
     return lua_gettop(L) - (int)extra;  /* return all results */
 }
 
-
 static int luaB_pcall (lua_State *L) {
   int status;
   luaL_checkany(L, 1);
