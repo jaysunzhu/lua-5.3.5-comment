@@ -1156,7 +1156,7 @@ LUA_API void lua_setuservalue (lua_State *L, int idx) {
      api_check(L, (nr) == LUA_MULTRET || (L->ci->top - L->top >= (nr) - (na)), \
 	"results from function overflow current stack size")
 
-/* lua中要调用某个函数时，就会用这个函数来执行具体的函数调用。n是参数个数，r是返回值个数。 */
+/* lua中要调用某个函数时，就会用这个函数来执行具体的函数调用。nargs是参数个数，nresults是返回值个数。 */
 LUA_API void lua_callk (lua_State *L, int nargs, int nresults,
                         lua_KContext ctx, lua_KFunction k) {
   StkId func;
@@ -1203,7 +1203,7 @@ static void f_call (lua_State *L, void *ud) {
 
 
 /*
-** 以保护模式来运行栈中的函数调用，其中待执行的函数指针可以由L->top - (nargs+1)得到
+** 以保护模式来运行栈中的函数调用
 */
 //lua_KFunction k 参考https://www.lua.org/manual/5.3/manual.html#4.7
 LUA_API int lua_pcallk (lua_State *L, int nargs, int nresults, int errfunc,

@@ -177,6 +177,7 @@ typedef struct CallInfo {
 #define CIST_HOOKED	(1<<2)	/* call is running a debug hook */
 #define CIST_FRESH	(1<<3)	/* call is running on a fresh invocation
                                    of luaV_execute */
+//CallInfo status is yieldable pcall
 #define CIST_YPCALL	(1<<4)	/* call is a yieldable protected call */
 #define CIST_TAIL	(1<<5)	/* call was tail called */
 #define CIST_HOOKYIELD	(1<<6)	/* last hook called yielded */
@@ -363,10 +364,12 @@ struct lua_State {
   int hookcount;
 
   /* 线程中不可中断的函数调用数 */
-  //nny = 0表示不可中断
+  //nny = 0表示可中断yieldable
   unsigned short nny;  /* number of non-yieldable calls in stack */
 
   /* 嵌套调用的函数的层数 */
+  //nCcallss 的意义在于当发生无穷递归后，Lua 虚拟机可以先于 C 层面的堆栈溢
+  // 出导致的毁灭性错误之前，捕获到这种情况，安全的抛出异常
   unsigned short nCcalls;  /* number of nested C calls */
 
   /* 存放触发钩子函数调用的事件对应的掩码 */

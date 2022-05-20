@@ -62,6 +62,8 @@
 /* thread status */
 #define LUA_OK		0
 #define LUA_YIELD	1
+// lua 的内部运行期异常，即错误码为 LUA_ERRRUN 的那个，都是直接或间接的由 luaG_errormsg 抛出
+// 的。按 lua 的约定，这类异常会在数据栈上留下错误信息，或是调用一个用户定义的错误处理函数。
 #define LUA_ERRRUN	2
 #define LUA_ERRSYNTAX	3
 #define LUA_ERRMEM	4

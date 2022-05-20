@@ -866,7 +866,7 @@ void luaD_callnoyield (lua_State *L, StkId func, int nResults) {
 ** Completes the execution of an interrupted C function, calling its
 ** continuation function.
 */
-/* 用于调用被中断函数的延续函数来完成被中断函数未完成的操作。 */
+//当执行流中断于一次 C 函数调用， finishCcall 函数能完成当初执行了一半的 C 函数的剩余工作
 static void finishCcall (lua_State *L, int status) {
 
   /* 获取当前被中断的函数对应的函数调用信息 */
@@ -882,6 +882,7 @@ static void finishCcall (lua_State *L, int status) {
   }
   /* finish 'lua_callk'/'lua_pcall'; CIST_YPCALL and 'errfunc' already
      handled */
+  //下方两行，同lua_callk的最后两行
   adjustresults(L, ci->nresults);
   lua_unlock(L);
 
@@ -923,6 +924,8 @@ static void unroll (lua_State *L, void *ud) {
       ** 对于Lua函数，分两步执行未完成的函数操作，首先是执行被中断的那条指令，然后才是执行
       ** 被中断指令的后续指令。
       */
+// 由于字节码的解析过程也可能因为触发元方法等情况调用 luaD_call 而从中间中断。 故需要先调用 luaV_finishOp
+// ，再交到 luaV_execute 来完成未尽的字节码
       luaV_finishOp(L);  /* finish interrupted instruction */
       luaV_execute(L);  /* execute down to higher C 'boundary' */
     }
@@ -1008,12 +1011,11 @@ static void resume (lua_State *L, void *ud) {
   /* 获取协程中当前正在运行的函数调用信息 */
   CallInfo *ci = L->ci;
   
-  /*
-  ** 如果此时协程的状态为LUA_OK，说明是第一次在该协程上执行resume操作，此时调用luaD_precall()
-  ** 做调用函数之前准备，如果是C函数的话，在luaD_precall()就会执行，如果是lua函数，准备工作完了
-  ** 之后还要在luaV_execute()虚拟机中具体执行。
-  */
+
   if (L->status == LUA_OK) {  /* starting a coroutine? */
+    /*
+    ** 如果此时协程的状态为LUA_OK，说明是第一次在该协程上执行resume操作，此时调用luaD_precall()
+    */
     if (!luaD_precall(L, firstArg - 1, LUA_MULTRET))  /* Lua function? */
       luaV_execute(L);  /* call it */
   }
@@ -1030,18 +1032,14 @@ static void resume (lua_State *L, void *ud) {
     */
     ci->func = restorestack(L, ci->extra);
 
-    //钩子函数是一个特殊情况，它是一个 C 函数，却看起来在 Lua 中。这时从 Callinfo 中的 extra 取出上次运行到的函数，
-    // 可以识别出这个情况。 当它是一个 Lua 调用，那么必然是从钩子函数中切出的，不会有被打断的虚拟机指
-    // 令，直接通过 LuaV_execute 继续它的字节码解析执行流程
+
     if (isLua(ci))  /* yielded inside a hook? */
+      //钩子函数是一个特殊情况，它是一个 C 函数，却看起来在 Lua 中。这时从 Callinfo 中的 extra 取出上次运行到的函数，
+      // 可以识别出这个情况。 当它是一个 Lua 调用，那么必然是从钩子函数中切出的，不会有被打断的虚拟机指
+      // 令，直接通过 LuaV_execute 继续它的字节码解析执行流程
       luaV_execute(L);  /* just continue running Lua code */
     else {  /* 'common' yield */
-
-      /*
-      ** 如果被中断的函数调用没有注册延续函数，那么就调用luaD_poscall()做被中断函数的收尾工作。
-      ** 相反，如果被中断的函数调用注册了延续函数，那么就调用延续函数来完成被中断函数未完成的
-      ** 操作。最后再调用luaD_poscall()来做一些收尾工作。
-      */
+      //C 函数，按照延续点的约定，调用延续点 k ，之后经过 luaD_poscall 完成这次调用
       if (ci->u.c.k != NULL) {  /* does it have a continuation function? */
         lua_unlock(L);
         n = (*ci->u.c.k)(L, LUA_YIELD, ci->u.c.ctx); /* call continuation */
@@ -1049,12 +1047,12 @@ static void resume (lua_State *L, void *ud) {
         api_checknelems(L, n);
         firstArg = L->top - n;  /* yield results come from continuation */
       }
-
-      //C 函数，按照延续点的约定，调用延续点 k ，之后经过 luaD_poscall 完成这次调用
+      
       luaD_poscall(L, ci, firstArg, n);  /* finish 'luaD_precall' */
     }
-
-	/* 完成当前协程的调用链中未完成的其他函数调用。 */
+    
+// 因为之前完整的调用层次，包含在 L 的 CallInfo
+// 中，而不是存在于当前的 C 调用栈上。如果检查到 Lua 的调用栈上有未尽的工作，必须完成它
     unroll(L, NULL);  /* run continuation */
   }
 }
@@ -1070,6 +1068,8 @@ LUA_API int lua_resume (lua_State *L, lua_State *from, int nargs) {
   unsigned short oldnny = L->nny;  /* save "number of non-yieldable" calls */
   lua_lock(L);
 
+  //create协程后，首次进入resume，故L->status == LUA_OK
+  //被yield后，L->status == LUA_YIELD
   if (L->status == LUA_OK) {  /* may be starting a coroutine */
     if (L->ci != &L->base_ci)  /* not in base level? */
       return resume_error(L, "cannot resume non-suspended coroutine", nargs);
@@ -1082,8 +1082,6 @@ LUA_API int lua_resume (lua_State *L, lua_State *from, int nargs) {
     */
     return resume_error(L, "cannot resume dead coroutine", nargs);
   
-  //create协程后，首次进入resume，故L->status == LUA_OK
-  //被yield后，L->status == LUA_YIELD
   L->nCcalls = (from) ? from->nCcalls + 1 : 1;
   if (L->nCcalls >= LUAI_MAXCCALLS)
     return resume_error(L, "C stack overflow", nargs);
@@ -1096,11 +1094,16 @@ LUA_API int lua_resume (lua_State *L, lua_State *from, int nargs) {
     //出现throw异常
     status = LUA_ERRRUN;
   else {  /* continue running after recoverable errors */
+    // lua_resume 需要具有捕获错误的能力。同样有这个能力的还有 lua_pcallk 。如果在调用栈
+    // 上，有 lua_pcallk 优先于它捕获错误，那么执行流应该交到 lua_pcallk 之后，也就是 lua_pcallk 设置的延续点函数。
+    // 。对 lua_resume 来说，错误被 lua_pcallk 捕获了，程序应该继续运行。它就有责任完成延续点的
+    // 约定。这是用 recover 和 unroll 函数完成的。
     while (errorstatus(status) && recover(L, status)) {
       /* unroll continuation */
       status = luaD_rawrunprotected(L, unroll, &status);
     }
     if (errorstatus(status)) {  /* unrecoverable error? */
+      //不可恢复的错误
       L->status = cast_byte(status);  /* mark thread as 'dead' */
       seterrorobj(L, status, L->top);  /* push error message */
       L->ci->top = L->top;
