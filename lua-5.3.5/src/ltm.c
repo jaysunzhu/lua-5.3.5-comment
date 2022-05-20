@@ -107,16 +107,20 @@ const char *luaT_objtypename (lua_State *L, const TValue *o) {
   return ttypename(ttnov(o));  /* else use standard type name */
 }
 
-//
+//以__index为例子：f为tm，p1为t，p2为key，p3为value
+//以__add为例子：f为tm，p1为+号前参数，p2为+号后参数，p3为value
+//hasres参数表示是否需要输出,1为输出
 void luaT_callTM (lua_State *L, const TValue *f, const TValue *p1,
                   const TValue *p2, TValue *p3, int hasres) {
   ptrdiff_t result = savestack(L, p3);
   StkId func = L->top;
   setobj2s(L, func, f);  /* push function (assume EXTRA_STACK) */
   setobj2s(L, func + 1, p1);  /* 1st argument */
+  //元方法对于表操作，第二个参数是 key 值；而二元运算操作则是第二个参数数
   setobj2s(L, func + 2, p2);  /* 2nd argument */
   L->top += 3;
   if (!hasres)  /* no result? 'p3' is third argument */
+    //特殊metamethod需要第三个参数，比如__newindex，第三个参数是value
     setobj2s(L, L->top++, p3);  /* 3rd argument */
   /* metamethod may yield only when called from Lua code */
   if (isLua(L->ci))
@@ -129,21 +133,26 @@ void luaT_callTM (lua_State *L, const TValue *f, const TValue *p1,
   }
 }
 
-//
+//res为输出，p1和p2为输入，event为运算指令
 int luaT_callbinTM (lua_State *L, const TValue *p1, const TValue *p2,
                     StkId res, TMS event) {
+  //先使用p1的元表
   const TValue *tm = luaT_gettmbyobj(L, p1, event);  /* try first operand */
   if (ttisnil(tm))
+    //p1无元表，再考虑p2的元表
     tm = luaT_gettmbyobj(L, p2, event);  /* try second operand */
-  if (ttisnil(tm)) return 0;
+  if (ttisnil(tm))
+    //p1和p2都没有元表
+    return 0;
   luaT_callTM(L, tm, p1, p2, res, 1);
   return 1;
 }
 
-//
+//res为输出，p1和p2为输入，event为运算指令
 void luaT_trybinTM (lua_State *L, const TValue *p1, const TValue *p2,
                     StkId res, TMS event) {
   if (!luaT_callbinTM(L, p1, p2, res, event)) {
+    //接下来错误处理
     switch (event) {
       case TM_CONCAT:
         luaG_concaterror(L, p1, p2);

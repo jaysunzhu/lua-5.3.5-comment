@@ -32,10 +32,14 @@
 ** lua的指令都是32位定长的指令，指令的格式有四种，由i、A、B、C、Ax、Bx、sBx
 ** 这几个元素组合而成。解释如下：
 ** iABC代表的指令格式是：低位 opcode(6)+A(8)+B(9)+C(9) 高位
+*					低位 opcode(6)+A(8)+Bx(18) 高位
+*					低位 opcode(6)+A(8)+sBx(18) 高位
+*					低位 opcode(6)+Ax(26) 高位
 *                     高位 C(9)+B(9)+A(8)+opcode(6) 低位
+*                     
 */
 enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
-
+//不必将常量加载到寄存器中再做后续处理，而是让具体指令直接去访问常量表。占用参数中的一个位。BC去掉这一位后还有8位，和A 长度吻合
 
 /*
 ** size and position of opcode arguments.
@@ -89,6 +93,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define MASK1(n,p)	((~((~(Instruction)0)<<(n)))<<(p))
 
 /* creates a mask with 'n' 0 bits at position 'p' */
+//参考MASK1
 #define MASK0(n,p)	(~ MASK1(n,p))
 
 /*
@@ -99,6 +104,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define SET_OPCODE(i,o)	((i) = (((i)&MASK0(SIZE_OP,POS_OP)) | \
 		((cast(Instruction, o)<<POS_OP)&MASK1(SIZE_OP,POS_OP))))
 
+//类似于GET_OPCODE，开放了pos,size两个参数
 #define getarg(i,pos,size)	(cast(int, ((i)>>pos) & MASK1(size,0)))
 #define setarg(i,v,pos,size)	((i) = (((i)&MASK0(size,pos)) | \
                 ((cast(Instruction, v)<<pos)&MASK1(size,pos))))
@@ -118,6 +124,8 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define GETARG_Ax(i)	getarg(i, POS_Ax, SIZE_Ax)
 #define SETARG_Ax(i,v)	setarg(i, v, POS_Ax, SIZE_Ax)
 
+
+//Lua 采用和浮点数的指数表示方式相同的移码来表示有符号的数字。例如，0 被表示为 2^17，而 -1 被表示为 2^17 - 1
 #define GETARG_sBx(i)	(GETARG_Bx(i)-MAXARG_sBx)
 #define SETARG_sBx(i,b)	SETARG_Bx((i),cast(unsigned int, (b)+MAXARG_sBx))
 
@@ -141,9 +149,10 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 
 /* this bit 1 means constant (0 means register) */
 /*
-** 从常量数组中取数据的标志位，数据的第8位为1则从常量数组中取数据，
-** 否则从函数栈寄存器取
+** 从常量数组中取数据的标志位，数据的第8位
 */
+//常量还是寄存器的标志位
+//为1则从常量数组中取数据，为0从函数栈寄存器取
 #define BITRK		(1 << (SIZE_B - 1))
 
 /* test whether value is a constant */
@@ -154,6 +163,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #define ISK(x)		((x) & BITRK)
 
 /* gets the index of the constant */
+//B、C需要去掉标志位后方位index
 #define INDEXK(r)	((int)(r) & ~BITRK)
 
 #if !defined(MAXINDEXRK)  /* (for debugging only) */
@@ -161,6 +171,7 @@ enum OpMode {iABC, iABx, iAsBx, iAx};  /* basic instruction format */
 #endif
 
 /* code a constant index as a RK value */
+//设置为常量
 #define RKASK(x)	((x) | BITRK)
 
 
@@ -284,7 +295,8 @@ OP_EXTRAARG/*	Ax	extra (larger) argument for previous opcode	*/
 ** bits 0-1: op mode
 ** bits 2-3: C arg mode
 ** bits 4-5: B arg mode
-** bit 6: instruction set register A
+//参考OpCode，为1表示R(A) := xx.标记对调试模块有所帮助。它用于跟踪最后改变寄存器 内容的指令位置，帮助生成调试信息
+** bit 6: instruction set register A 
 ** bit 7: operator is a test (next instruction must be a jump)
 */
 

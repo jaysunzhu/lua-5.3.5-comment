@@ -161,11 +161,13 @@ void luaV_finishget (lua_State *L, const TValue *t, TValue *key, StkId val,
                       const TValue *slot) {
   int loop;  /* counter to avoid infinite loops */
   const TValue *tm;  /* metamethod */
+  //Table metamethod 最多2000层
   for (loop = 0; loop < MAXTAGLOOP; loop++) {
     if (slot == NULL) {  /* 't' is not a table? */
       lua_assert(!ttistable(t));
       tm = luaT_gettmbyobj(L, t, TM_INDEX);
       if (ttisnil(tm))
+        //中断 畬畵畡畖 luaV_execute 的执行
         luaG_typeerror(L, t, "index");  /* no metamethod */
       /* else will try the metamethod */
     }
@@ -178,10 +180,13 @@ void luaV_finishget (lua_State *L, const TValue *t, TValue *key, StkId val,
       }
       /* else will try the metamethod */
     }
+    //元方法可以是表，也可以是function
+    //tm是function，调用
     if (ttisfunction(tm)) {  /* is metamethod a function? */
       luaT_callTM(L, tm, t, key, val, 1);  /* call it */
       return;
     }
+    //tm是table
     t = tm;  /* else try to access 'tm[key]' */
     if (luaV_fastget(L,t,key,slot,luaH_get)) {  /* fast track? */
       setobj2s(L, val, slot);  /* done */
@@ -215,6 +220,7 @@ void luaV_finishset (lua_State *L, const TValue *t, TValue *key,
         /* no metamethod and (now) there is an entry with given key */
         setobj2t(L, cast(TValue *, slot), val);  /* set its new value */
         invalidateTMcache(h);
+        //表内容的更改有可能导致 界畵畡 内其它对象的生命期变化，所以需要调用luaC_barrierback
         luaC_barrierback(L, h, val);
         return;
       }
@@ -476,8 +482,10 @@ void luaV_concat (lua_State *L, int total) {
   do {
     StkId top = L->top;
     int n = 2;  /* number of elements handled in this pass (at least 2) */
+
     if (!(ttisstring(top-2) || cvt2str(top-2)) || !tostring(L, top-1))
       luaT_trybinTM(L, top-2, top-1, top-2, TM_CONCAT);
+    //两个字符串含空字符串，进行修正。是不是可以不用修正列？
     else if (isemptystr(top - 1))  /* second operand is empty? */
       cast_void(tostring(L, top - 2));  /* result is first operand */
     else if (isemptystr(top - 2)) {  /* first operand is an empty string? */
@@ -487,6 +495,7 @@ void luaV_concat (lua_State *L, int total) {
       /* at least two non-empty string values; get as many as possible */
       size_t tl = vslen(top - 1);
       TString *ts;
+      //统计total个参数字符串总长度
       /* collect total length and number of strings */
       for (n = 1; n < total && tostring(L, top - n - 1); n++) {
         size_t l = vslen(top - n - 1);
@@ -496,6 +505,7 @@ void luaV_concat (lua_State *L, int total) {
       }
       if (tl <= LUAI_MAXSHORTLEN) {  /* is result a short string? */
         char buff[LUAI_MAXSHORTLEN];
+        //copy top到top-n的字符串到buff
         copy2buff(top, n, buff);  /* copy strings to buffer */
         ts = luaS_newlstr(L, buff, tl);
       }
@@ -503,6 +513,7 @@ void luaV_concat (lua_State *L, int total) {
         ts = luaS_createlngstrobj(L, tl);
         copy2buff(top, n, getstr(ts));
       }
+      //更新到第一个参数
       setsvalue2s(L, top - n, ts);  /* create result */
     }
     total -= n-1;  /* got 'n' strings to create 1 new */
@@ -519,6 +530,7 @@ void luaV_objlen (lua_State *L, StkId ra, const TValue *rb) {
   switch (ttype(rb)) {
     case LUA_TTABLE: {
       Table *h = hvalue(rb);
+        //表格优先使用元方法
       tm = fasttm(L, h->metatable, TM_LEN);
       if (tm) break;  /* metamethod? break switch to call it */
       setivalue(ra, luaH_getn(h));  /* else primitive len */
@@ -734,7 +746,7 @@ void luaV_finishOp (lua_State *L) {
 */
 
 /*
-** RA(i)表示指令i中参数ra的栈地址，RB(i)表示指令i中参数rb的栈地址。
+** RA(i)表示寄存器A的栈地址（通过指令i的A栈下标获取），RB(i)表示指令i中参数rb的栈地址。
 ** GETARG_A(i)用于取出指令i中A部分的值，这部分的值是相对于函数内部的栈的基址（函数Closure对象的
 ** 下一个栈单元）的偏移量，函数内部的栈的范围[ci->u.l.base, ci->top)，用于存放函数参数及函数内
 ** 定义的本地变量。
@@ -801,7 +813,12 @@ void luaV_finishOp (lua_State *L) {
     Protect(luaV_finishset(L,t,k,v,slot)); }
 
 
-/* 指令执行的入口函数，即Lua虚拟机实现 */
+// luaV_execute 是 Lua 虚拟机执行一段字节码的入口。如果把 Lua 虚拟机看成一个状态机
+// ，它就是从当前调用栈上次运行点开始解释字节码指令，直到下一个 C 边界跳出点。所谓 C 边界跳出点，可以是函数执
+// 行完毕，也可以是一次协程 yield 操作
+// 每次进入一层 Lua 函数，以及退出一层 Lua 函数，luaV_execute 并不对应的产生一次 C 层面的函数
+// 调用。也就是说，从 Lua 中调用一个 Lua 函数，并不会产生一次独立的 luaV_execute 调用。Lua 自己维护
+// 数据栈和调用栈，在解析字节码的时候，用 goto 来更新栈信息
 void luaV_execute (lua_State *L) {
 
   /* L->ci指向的始终是函数调用链中当前正在执行的函数调用对应的CallInfo节点 */
@@ -819,6 +836,9 @@ void luaV_execute (lua_State *L) {
   /* 当前执行函数的栈基址 */
   StkId base;
   ci->callstatus |= CIST_FRESH;  /* fresh invocation of 'luaV_execute" */
+
+  //定义了 newframe 这个跳转标签，函数调用 OP_CALL OP_TAILCALL 以及函数返回 OP_RETRUN 都会回
+  //到这里，更新栈帧继续运行
  newframe:  /* reentry point when frame changes (call/return) */
   lua_assert(ci == L->ci);
 
@@ -826,30 +846,33 @@ void luaV_execute (lua_State *L) {
   cl = clLvalue(ci->func);  /* local reference to function's closure */
 
   /* 获取当前调用函数的常量表 */
+  //k不在数据栈上，而存在于Closure的Proto对象中
   k = cl->p->k;  /* local reference to function's constant table */
 
-  /*
-  ** 获取当前函数第一个参数的地址，从这个地址往后倒ci->top的前一个栈单元就是该函数的独有的栈信息。
-  ** 包含参数、内部定义的本地变量的。
-  */
+
+  //ci->u.l，是lua函数
   base = ci->u.l.base;  /* local copy of function's base */
   /* main loop of interpreter */
   for (;;) {
-    Instruction i;
-    StkId ra;
-    vmfetch();    /* 从ci->u.l.savedpc中取出一条指令存放到i中 */
+    Instruction i;//当前指令id
+    StkId ra; //局部变量引用RA寄存器
+    //vmfetch获取i和ra
+    vmfetch();    
     /* 根据指令的操作码做相应的操作 */
     vmdispatch (GET_OPCODE(i)) {
+      //其它寄存器到寄存器，即局部变量
       vmcase(OP_MOVE) {
         setobjs2s(L, ra, RB(i));        /* move指令，将rb中的值拷贝到ra中 */
         vmbreak;
       }
+      //需通过常量表
       vmcase(OP_LOADK) {
         TValue *rb = k + GETARG_Bx(i);
         setobj2s(L, ra, rb);
 
         vmbreak;
       }
+      //如果常量表过大，索引号超过了 BX 可以表达的范围，就使用 OP_LOADKX 
       vmcase(OP_LOADKX) {
         TValue *rb;
         lua_assert(GET_OPCODE(*ci->u.l.savedpc) == OP_EXTRAARG);
@@ -857,11 +880,13 @@ void luaV_execute (lua_State *L) {
         setobj2s(L, ra, rb);
         vmbreak;
       }
+      //nil 和 bool 类型的数据比较短，可以通过指令直接加载，而勿需通过常量表
       vmcase(OP_LOADBOOL) {
         setbvalue(ra, GETARG_B(i));
         if (GETARG_C(i)) ci->u.l.savedpc++;  /* skip next instruction (if C) */
         vmbreak;
       }
+      //nil 和 bool 类型的数据比较短，可以通过指令直接加载，而勿需通过常量表
       vmcase(OP_LOADNIL) {
         int b = GETARG_B(i);
         do {
@@ -869,6 +894,7 @@ void luaV_execute (lua_State *L) {
         } while (b--);
         vmbreak;
       }
+      //一些既不是常量，又不在寄存器中的数据,这类数据仅指 upvalues 或存在于某张表中的值
       vmcase(OP_GETUPVAL) {
         int b = GETARG_B(i);
         setobj2s(L, ra, cl->upvals[b]->v);
@@ -915,6 +941,8 @@ void luaV_execute (lua_State *L) {
         checkGC(L, ra + 1);
         vmbreak;
       }
+      //SELF 在 Lua 语法中是一个语法糖。但 Lua 虚拟机的确为它做了优化。a:f() 和 local a
+      // = a;a.f(a) 看起来完整一致，但它们对应的字节码却有区别
       vmcase(OP_SELF) {
         const TValue *aux;
         StkId rb = RB(i);
@@ -931,10 +959,13 @@ void luaV_execute (lua_State *L) {
         TValue *rb = RKB(i);
         TValue *rc = RKC(i);
         lua_Number nb; lua_Number nc;
+        //整形相加
         if (ttisinteger(rb) && ttisinteger(rc)) {
           lua_Integer ib = ivalue(rb); lua_Integer ic = ivalue(rc);
+          //signed转unsigned做加法
           setivalue(ra, intop(+, ib, ic));
         }
+        //浮点型相加
         else if (tonumber(rb, &nb) && tonumber(rc, &nc)) {
           setfltvalue(ra, luai_numadd(L, nb, nc));
         }

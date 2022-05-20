@@ -64,6 +64,9 @@
 /*
 ** standard implementation for 'gettable'
 */
+//在对表结构读操作的封装。在基础的表访问的基础上，增加了元方法的处理
+//第一行，t[k]成功get到slot，将value放到stack的v位置（top-1）
+//第二行，触发原表
 #define luaV_gettable(L,t,k,v) { const TValue *slot; \
   if (luaV_fastget(L,t,k,slot,luaH_get)) { setobj2s(L, v, slot); } \
   else luaV_finishget(L,t,k,v,slot); }
@@ -86,7 +89,9 @@
         setobj2t(L, cast(TValue *,slot), v), \
         1)))
 
-
+//在对表结构写操作的封装。在基础的表访问的基础上，增加了元方法的处理
+//第一行，t[k]成功get到slot，将value放到stack的v位置（top-1）
+//第二行，触发原表
 #define luaV_settable(L,t,k,v) { const TValue *slot; \
   if (!luaV_fastset(L,t,k,slot,luaH_get,v)) \
     luaV_finishset(L,t,k,v,slot); }

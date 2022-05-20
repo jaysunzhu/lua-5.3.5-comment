@@ -68,13 +68,7 @@ LUAI_DDEF const char *const luaP_opnames[NUM_OPCODES+1] = {
   NULL
 };
 
-/*
-** opmode用于构造一条指令，每个部分解释如下：
-** T表示这是不是一条和逻辑测试相关的指令，逻辑测试指令可能会使pc自增1。
-** A表示这条指令会不会赋值给R(A)
-** B/C表示B、C参数的格式
-** mode表示指令的格式
-*/
+//see:masks for instruction properties
 #define opmode(t,a,b,c,m) (((t)<<7) | ((a)<<6) | ((b)<<4) | ((c)<<2) | (m))
 
 LUAI_DDEF const lu_byte luaP_opmodes[NUM_OPCODES] = {

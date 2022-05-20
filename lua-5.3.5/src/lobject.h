@@ -332,6 +332,7 @@ typedef struct lua_TValue {
 
 
 /* from stack to (same) stack */
+//from obj2 to obj1
 #define setobj(L,obj1,obj2) \
 	{ TValue *io1=(obj1); *io1 = *(obj2); \
 	  (void)L; checkliveness(L,io1); }
@@ -342,6 +343,7 @@ typedef struct lua_TValue {
 */
 
 /* from stack to (same) stack */
+//其它寄存器到寄存器
 #define setobjs2s	setobj
 /* to stack (not from same stack) */
 #define setobj2s	setobj
