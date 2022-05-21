@@ -82,6 +82,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
 }
 
 //upval 从open移到close，没引用则直接释放
+//level 为数据栈地址（数据栈内存在操作系统的堆上，故向高地址发展）
 void luaF_close (lua_State *L, StkId level) {
   UpVal *uv;
   while (L->openupval != NULL && (uv = L->openupval)->v >= level) {

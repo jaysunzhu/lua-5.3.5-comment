@@ -242,6 +242,7 @@ typedef struct lua_TValue {
 /* a dead value may get the 'gc' field, but cannot access its contents */
 #define deadvalue(o)	check_exp(ttisdeadkey(o), cast(void *, val_(o).gc))
 
+//lua 判断语句是否为false。包含nil或者false
 #define l_isfalse(o)	(ttisnil(o) || (ttisboolean(o) && bvalue(o) == 0))
 
 /*

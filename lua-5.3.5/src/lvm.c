@@ -257,17 +257,26 @@ static int l_strcmp (const TString *ls, const TString *rs) {
   const char *r = getstr(rs);
   size_t lr = tsslen(rs);
   for (;;) {  /* for each segment */
+  //默认情况下(LC_COLLATE为"POSIX"或"C")和strcmp一样根据ASCII比较字符串大小。
+  //对于设置了LC_COLLATE语言环境的情况下，则根据LC_COLLATE设置的语言排序方式进行比较。例如：汉字，根据拼音进行比较。
     int temp = strcoll(l, r);
     if (temp != 0)  /* not equal? */
       return temp;  /* done */
     else {  /* strings are equal up to a '\0' */
+    //由于getstr末尾是没有'\0',所以不排除中间有'\0'，并且trings are equal up to a '\0'
+    //故需要做一下对比
       size_t len = strlen(l);  /* index of first '\0' in both strings */
+
+      //strlen有命中lr或ll
       if (len == lr)  /* 'rs' is finished? */
         return (len == ll) ? 0 : 1;  /* check 'ls' */
       else if (len == ll)  /* 'ls' is finished? */
         return -1;  /* 'ls' is smaller than 'rs' ('rs' is not finished) */
+        
       /* both strings longer than 'len'; go on comparing after the '\0' */
+      //都不命中，意味ll和lr都比len大了
       len++;
+      //l和r跳过'\0'字节后，继续比较
       l += len; ll -= len; r += len; lr -= len;
     }
   }
@@ -327,12 +336,14 @@ static int LTnum (const TValue *l, const TValue *r) {
     if (ttisinteger(r))
       return li < ivalue(r);  /* both are integers */
     else  /* 'l' is int and 'r' is float */
+    //都按照float对比
       return LTintfloat(li, fltvalue(r));  /* l < r ? */
   }
   else {
     lua_Number lf = fltvalue(l);  /* 'l' must be float */
     if (ttisfloat(r))
       return luai_numlt(lf, fltvalue(r));  /* both are float */
+      //NaN（Not a Number，非数）是计算机科学中数值数据类型的一类值，表示未定义或不可表示的值。常在浮点数运算中使用
     else if (luai_numisnan(lf))  /* 'r' is int and 'l' is float */
       return 0;  /* NaN < i is always false */
     else  /* without NaN, (l < r)  <-->  not(r <= l) */
@@ -410,13 +421,18 @@ int luaV_lessequal (lua_State *L, const TValue *l, const TValue *r) {
 ** Main operation for equality of Lua values; return 't1 == t2'.
 ** L == NULL means raw equality (no metamethods)
 */
+//判断TValue对象 是否相等。1相等，0不相等
+//如果L为空，就不触发元方法，可参考luaV_rawequalobj宏
 int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2) {
   const TValue *tm;
   if (ttype(t1) != ttype(t2)) {  /* not the same variant? */
+    //不同类型
+    //无法解决基础类型不一致并且不是数值类型的
     if (ttnov(t1) != ttnov(t2) || ttnov(t1) != LUA_TNUMBER)
       return 0;  /* only numbers can be equal with different variants */
     else {  /* two numbers with different variants */
       lua_Integer i1, i2;  /* compare them as integers */
+      //转整型后进行比较
       return (tointeger(t1, &i1) && tointeger(t2, &i2) && i1 == i2);
     }
   }
@@ -433,6 +449,7 @@ int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2) {
     case LUA_TUSERDATA: {
       if (uvalue(t1) == uvalue(t2)) return 1;
       else if (L == NULL) return 0;
+      //读取元表
       tm = fasttm(L, uvalue(t1)->metatable, TM_EQ);
       if (tm == NULL)
         tm = fasttm(L, uvalue(t2)->metatable, TM_EQ);
@@ -441,12 +458,14 @@ int luaV_equalobj (lua_State *L, const TValue *t1, const TValue *t2) {
     case LUA_TTABLE: {
       if (hvalue(t1) == hvalue(t2)) return 1;
       else if (L == NULL) return 0;
+      //读取元表
       tm = fasttm(L, hvalue(t1)->metatable, TM_EQ);
       if (tm == NULL)
         tm = fasttm(L, hvalue(t2)->metatable, TM_EQ);
       break;  /* will try TM */
     }
     default:
+    //gc类型的thread和function
       return gcvalue(t1) == gcvalue(t2);
   }
   if (tm == NULL)  /* no TM? */
@@ -602,6 +621,7 @@ lua_Integer luaV_mod (lua_State *L, lua_Integer m, lua_Integer n) {
 /*
 ** Shift left operation. (Shift right just negates 'y'.)
 */
+//位移
 lua_Integer luaV_shiftl (lua_Integer x, lua_Integer y) {
   if (y < 0) {  /* shift right? */
     if (y <= -NBITS) return 0;
