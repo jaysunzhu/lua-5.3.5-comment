@@ -749,9 +749,10 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       */
       int fsize = p->maxstacksize;  /* frame size */
 
-// Lua 函数整体所需要的栈空间是在生成字节码时就已知的，所以可以用
-// checkstackp 一次性分配好
-         //数据栈检查和增长
+      // Lua 函数整体所需要的栈空间是在生成字节码时就已知的，所以可以用
+      // checkstackp 一次性分配好
+
+      //数据栈检查和增长
       checkstackp(L, fsize, func);
 
       /* 判断函数是不是可变参函数 */

@@ -1220,40 +1220,29 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_CALL) {
+        //B 为 0 时，表示传入参数是不定数量的，那么实际参数就由栈顶到函数对象的位置 A 的距离
+        //决定。当 B 大于 0 时，参数个数为 B - 1 ，此时需要临时调整数据栈顶指针为 ra+b
         int b = GETARG_B(i);
+        // 当 C 为 0 时，返回值是变长的，数量不可预期。Lua 把这种调用成为 open call 。这种情况只发生在链
+        // 式调用，即把一个函数的返回值，作为另一个接收变长参数的 Lua 函数的参数的调用；以及尾调用，还有利
+        // 用函数返回值去初始化一张表的情况。若 C 大于 0 ，则明确接收函数产生的返回值中的 C - 1 个
         int nresults = GETARG_C(i) - 1;
         /*
-        ** 要调用一个新的函数时，这里将L->top设置为新函数最后一个参数的下一个栈单元，
-        ** 新被调用的函数一开始会从这里开始存放函数执行结果，执行完后才会通过moveresults()
-        ** 函数执行结果挪到从函数对象所在单元ra的位置开始依次存放。
         ** 如果b为0，说明下面即将被调用的函数的参数个数目前来说是不确定的，这个时候的栈指针
         ** L->top会由前面一条指令来设置。
-        ** 例如print(sum(a, b))这样一条语句，print由于不知道最终的参数个数，这个时候，对应的
-        ** 函数调用指令是CALL 0 0 1。中间的0即为这里的b，说明print的参数中含有其他的函数调用，
-        ** 由于print无法知道sum的返回值个数，也就不知道自己的参数个数，因此用0来表示参数范围
-        ** 从ra+1的的位置开始到print的函数栈顶部ci->top之间，即[ra+1, ci->top)。这种情况下L->top
-        ** 就以sum中设定的为准，sum会在return的时候根据自己的返回值情况调整好L->top。
         */
+        //OP_CALL时的ra是func slot
+        //luaD_precall构建ci的函数参数，是通过L->top减func求出
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
 
         if (luaD_precall(L, ra, nresults)) {  /* C function? */
-          /*
-          ** 进入这个分支，说明luaD_precall()里面准备执行的函数（被调用）是一个C函数，对于C函数而言，
-          ** 在luaD_precall()函数中就已经完成了C函数的调用，并调用了luaD_poscall()将L->ci
-          ** 设置成了当前函数调用（L->ci在上面调用的luaD_precall()中会被设置为被调用函数对应的
-          ** 函数调用信息，执行完函数调用后，在luaD_poscall()又会恢复回来），同时栈指针L->top在
-          ** luaD_poscall()-->moveresults()中会被设置为C函数最后一个返回值的下一个栈单元。
-          ** 下面的分支判断中，如果C函数期望的返回值大于等于0，那么又将栈指针L->top设置成当前函数
-          ** 调用对应的ci->top，这又是为什么呢？因为被调用C函数最后一个返回值的下一个栈单元不一定是
-          ** 当前函数调用的栈最后一个单元的下一个单元，而可能是在函数调用栈里面，那么这个时候
-          ** L->top指向的单元就在当前函数调用栈里面。那如果后续往栈里面写数据的话，就可能会
-          ** 破坏当前的函数调用栈里面的数据，因此这里将L->top设置成当前函数的调用栈的最后一个单元的
-          ** 下一个单元，以保证自身调用栈数据的完整和安全。
-          */
+          //如果函数是一个 C 函数，那么在 luaD_precall 完成后，函数已经调用完毕。如果不是 open call ，就需
+          // 要把数据栈顶指针复位（对应前面修改数据栈顶指针的行为）。否则，留待后续的处理
           if (nresults >= 0)
             L->top = ci->top;  /* adjust results */
 		  
-          /* base在执行C函数过程中有变化吗？为什么要重新设置呢？ */
+          //对 luaD_precall 的调用无法用 Protect 宏包裹起来（需要取得返回值），base 值有可能被修改，故需要显
+          // 式写一行 base 变量的重置
           Protect((void)0);  /* update 'base' */
         }
         else {  /* Lua function */
@@ -1265,32 +1254,49 @@ void luaV_execute (lua_State *L) {
           ** 在该函数中会将L->ci重新设值为调用函数对应的ci，从而可以继续执行调用函数函数
           ** 未完成的指令。
           */
+         //luaD_precall已经准备好被调用的ci数据
           ci = L->ci;
           goto newframe;  /* restart luaV_execute over new Lua function */
         }
         vmbreak;
       }
       vmcase(OP_TAILCALL) {
+        // 尾调用指函数最后以调用另一个函数的形式结束。这样另一个函数的返回值就可以看作当前函数的返回
+        // 值。Lua 的编译模块在生成这类代码的字节码时，会专门为这种情况生成 TAILCALL 的操作码。单独为尾
+        // 调用优化，可以节省最后一步参数传递的开销，而且一旦发生尾调用，当前函数已经不再需要数据栈和调用
+        // 栈，新的调用层次直接复用它们即可
         int b = GETARG_B(i);
         if (b != 0) L->top = ra+b;  /* else previous instruction set top */
+        //尾调用必须是一次 open call ，所以 C 必须为 0。对 luaD_precall 的调用，返回值参数个数也就写死为
+        // LUA_MULTRET 了
         lua_assert(GETARG_C(i) - 1 == LUA_MULTRET);
         if (luaD_precall(L, ra, LUA_MULTRET)) {  /* C function? */
           Protect((void)0);  /* update 'base' */
         }
         else {
+          //Lua 函数 就需要复用当前栈帧
           /* tail call: put called frame (n) in place of caller one (o) */
-          CallInfo *nci = L->ci;  /* called frame */
-          CallInfo *oci = nci->previous;  /* caller frame */
+          CallInfo *nci = L->ci;  /* called frame */ //尾调用的 ci
+          CallInfo *oci = nci->previous;  /* caller frame */ //调用尾调用的caller ci
           StkId nfunc = nci->func;  /* called function */
           StkId ofunc = oci->func;  /* caller function */
           /* last stack slot filled by 'precall' */
+          //[base,lim)为数据栈中参数部分
           StkId lim = nci->u.l.base + getproto(nfunc)->numparams;
           int aux;
           /* close all upvalues from previous call */
+          //关闭当前栈帧上的 upvalue ，原本这个步骤应该由 RETURN 来完成的。但因为发生尾调用时，
+          // 当前栈帧上的变量已经结束了它们的生命期，并将被新的函数复用空间，所以 luaF_close 这个操作是需要提
+          // 前做的
           if (cl->p->sizep > 0) luaF_close(L, oci->u.l.base);
           /* move new frame into old one */
+
+          //在新一层数据栈上准备好的参数，都复制到当前栈帧上
           for (aux = 0; nfunc + aux < lim; aux++)
+            //从nfunc 2 ofunc
             setobjs2s(L, ofunc + aux, nfunc + aux);
+
+          //直接修正  调用尾调用的caller ci
           oci->u.l.base = ofunc + (nci->u.l.base - nfunc);  /* correct base */
           oci->top = L->top = ofunc + (L->top - nfunc);  /* correct top */
           oci->u.l.savedpc = nci->u.l.savedpc;
@@ -1302,6 +1308,8 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_RETURN) {
+        //只可能是Lua 函数
+
         /* 获取return指令的B部分内容。 */
         int b = GETARG_B(i);
 
@@ -1315,29 +1323,18 @@ void luaV_execute (lua_State *L) {
 
         // If B is 1, there are no return values. If B is 2 or more, there are (B-1) return values, located in consecutive registers from R(A) onwards.
         // If B is 0, the set of values range from R(A) to the top of the stack.
-        // If B is 0 then the previous instruction (which must be either OP_CALL or OP_VARARG ) would have set L->top to indicate how many values to return.
+        // If B is 0 then the previous instruction (which must be either OP_CALL OP_TAILCALLor OP_VARARG ) would have set L->top to indicate how many values to return.
         b = luaD_poscall(L, ci, ra, (b != 0 ? b - 1 : cast_int(L->top - ra)));
         if (ci->callstatus & CIST_FRESH)  /* local 'ci' still from callee */
           return;  /* external invocation: return */
         else {  /* invocation via reentry: continue execution */
 
           /*
-          ** 程序进入这个分支，说明return语句对应的这个函数是被一个lua函数在虚拟机内部调用的。
-          */
-          
-          /*
           ** L->ci在luaD_poscall()中已经设置为上一层函数对应的函数调用信息了，因此下面这条语句
           ** 得到的ci对象是调用这个即将返回的函数的函数对应的函数调用信息。
           */
           ci = L->ci;
 
-          /*
-          ** b是luaD_poscall()的返回值，为1表明调用该函数的时候传入的返回值个数是非LUA_MULTRET的
-          ** 其他情况，这个时候需要将L->top设置为当前函数的栈的顶部。因为在函数moveresults()中
-          ** L->top会被设置为即将返回的这个函数的返回值所在单元的下一个单元，这个位置位于上一层
-          ** 函数的栈内部。而现在已经返回到上一层函数了，因此要将整个栈的栈指针设置为上一层函数的
-          ** 栈的顶部。这样才不会导致上一层函数的栈信息的丢失。
-          */
           if (b) L->top = ci->top;
 
 		  /*

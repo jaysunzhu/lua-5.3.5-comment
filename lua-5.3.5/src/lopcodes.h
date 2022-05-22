@@ -242,6 +242,7 @@ OP_TEST,/*	A C	if not (R(A) <=> C) then pc++			*/
 OP_TESTSET,/*	A B C	if (R(B) <=> C) then R(A) := R(B) else pc++	*/
 
 OP_CALL,/*	A B C	R(A), ... ,R(A+C-2) := R(A)(R(A+1), ... ,R(A+B-1)) */
+//尾调用，它是对标准函数调用的优化。尾调用不生成新的调用栈，而不复用当前的
 OP_TAILCALL,/*	A B C	return R(A)(R(A+1), ... ,R(A+B-1))		*/
 OP_RETURN,/*	A B	return R(A), ... ,R(A+B-2)	(see note)	*/
 
