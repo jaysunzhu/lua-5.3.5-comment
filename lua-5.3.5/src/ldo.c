@@ -656,6 +656,7 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
   lua_CFunction f;
   CallInfo *ci;
   switch (ttype(func)) {
+    //c 函数没有不定长的需求
     case LUA_TCCL:  /* C closure */
       /* 获取待调用的函数指针 */
       f = clCvalue(func)->f;

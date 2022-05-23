@@ -257,6 +257,7 @@ OP_SETLIST,/*	A B C	R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B	*/
 
 OP_CLOSURE,/*	A Bx	R(A) := closure(KPROTO[Bx])			*/
 
+//OP_VARARG 指令可以把 ... 参数中的若干个复制到当前栈帧
 OP_VARARG,/*	A B	R(A), R(A+1), ..., R(A+B-2) = vararg		*/
 
 OP_EXTRAARG/*	Ax	extra (larger) argument for previous opcode	*/
