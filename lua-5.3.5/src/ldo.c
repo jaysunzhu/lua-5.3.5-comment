@@ -775,6 +775,7 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       }
 
       /* 从lua_State的ci链表中获取一个CallInfo节点，用于存放当前函数调用的信息 */
+      // L->ci同时更新
       ci = next_ci(L);  /* now 'enter' new function */
       ci->nresults = nresults;
       ci->func = func;

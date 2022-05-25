@@ -546,7 +546,7 @@ typedef struct Proto {
   lu_byte is_vararg;  
 
   /* 该函数所需要的函数栈的大小，函数的栈中会存放函数参数，函数内部定义的局部变量等。 */
-  //slot数量，包含了此proto的参数、局部变量以及proto中所有call函数中最大的实参。
+  //slot数量，包含了此proto的参数、局部变量以及proto中所有call函数中最多的实参和对于1个cl，不含upvalue。
   //空函数情况下为2
   lu_byte maxstacksize;  /* number of registers needed by this function */
 

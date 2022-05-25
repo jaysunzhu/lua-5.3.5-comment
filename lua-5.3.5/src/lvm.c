@@ -1233,7 +1233,11 @@ void luaV_execute (lua_State *L) {
         */
         //OP_CALL时的ra是func slot
         //luaD_precall构建ci的函数参数，是通过L->top减func求出
-        if (b != 0) L->top = ra+b;  /* else previous instruction set top */
+        if (b != 0)
+          //ra是准备call的func的slot，[ra,ra+b)对于就是func和实际传入的参数
+          L->top = ra+b;
+        else
+          /* else previous instruction set top */
 
         if (luaD_precall(L, ra, nresults)) {  /* C function? */
           //如果函数是一个 C 函数，那么在 luaD_precall 完成后，函数已经调用完毕。如果不是 open call ，就需
@@ -1266,7 +1270,12 @@ void luaV_execute (lua_State *L) {
         // 调用优化，可以节省最后一步参数传递的开销，而且一旦发生尾调用，当前函数已经不再需要数据栈和调用
         // 栈，新的调用层次直接复用它们即可
         int b = GETARG_B(i);
-        if (b != 0) L->top = ra+b;  /* else previous instruction set top */
+        if (b != 0)
+          //ra是准备call的func的slot，[ra,ra+b)对于就是func和实际传入的参数
+          L->top = ra+b;
+        else
+          /* else previous instruction set top */
+          
         //尾调用必须是一次 open call ，所以 C 必须为 0。对 luaD_precall 的调用，返回值参数个数也就写死为
         // LUA_MULTRET 了
         lua_assert(GETARG_C(i) - 1 == LUA_MULTRET);
@@ -1276,7 +1285,7 @@ void luaV_execute (lua_State *L) {
         else {
           //Lua 函数 就需要复用当前栈帧
           /* tail call: put called frame (n) in place of caller one (o) */
-          CallInfo *nci = L->ci;  /* called frame */ //尾调用的 ci
+          CallInfo *nci = L->ci;  /* called frame */ //尾调用的called ci
           CallInfo *oci = nci->previous;  /* caller frame */ //调用尾调用的caller ci
           StkId nfunc = nci->func;  /* called function */
           StkId ofunc = oci->func;  /* caller function */
@@ -1301,6 +1310,7 @@ void luaV_execute (lua_State *L) {
           oci->top = L->top = ofunc + (L->top - nfunc);  /* correct top */
           oci->u.l.savedpc = nci->u.l.savedpc;
           oci->callstatus |= CIST_TAIL;  /* function was tail called */
+          //尾调用指令复用caller的ci，故Lua数据栈不会增加，避免数据栈爆栈
           ci = L->ci = oci;  /* remove new frame */
           lua_assert(L->top == oci->u.l.base + getproto(ofunc)->maxstacksize);
           goto newframe;  /* restart luaV_execute over new Lua function */
@@ -1323,7 +1333,7 @@ void luaV_execute (lua_State *L) {
 
         // If B is 1, there are no return values. If B is 2 or more, there are (B-1) return values, located in consecutive registers from R(A) onwards.
         // If B is 0, the set of values range from R(A) to the top of the stack.
-        // If B is 0 then the previous instruction (which must be either OP_CALL OP_TAILCALLor OP_VARARG ) would have set L->top to indicate how many values to return.
+        // If B is 0 then the previous instruction (which must be either OP_CALL OP_TAILCALL or OP_VARARG ) would have set L->top to indicate how many values to return.
         b = luaD_poscall(L, ci, ra, (b != 0 ? b - 1 : cast_int(L->top - ra)));
         if (ci->callstatus & CIST_FRESH)  /* local 'ci' still from callee */
           return;  /* external invocation: return */
@@ -1422,12 +1432,17 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_SETLIST) {
+        //SETLIST 是为了某些机器生成的代码制造的海量数据准备的， 
+        
+        //一次需要复制的数据的个数
         int n = GETARG_B(i);
+        //偏移量
         int c = GETARG_C(i);
         unsigned int last;
         Table *h;
         if (n == 0) n = cast_int(L->top - ra) - 1;
         if (c == 0) {
+          //如果 C （只有 9 位）超过范围的话，可以利用接下来的 EXTRAARG 来获得更大范围的 C
           lua_assert(GET_OPCODE(*ci->u.l.savedpc) == OP_EXTRAARG);
           c = GETARG_Ax(*ci->u.l.savedpc++);
         }
@@ -1462,6 +1477,7 @@ void luaV_execute (lua_State *L) {
         if (n < 0)  /* less arguments than parameters? */
           n = 0;  /* no vararg arguments */
         if (b < 0) {  /* B == 0? */
+          //表示要全部复制
           b = n;  /* get all var. arguments */
           Protect(luaD_checkstack(L, n));
           ra = RA(i);  /* previous call may change the stack */
@@ -1473,7 +1489,7 @@ void luaV_execute (lua_State *L) {
         //可变实参不足，补nil
         for (; j < b; j++)  /* complete required results with nil */
           setnilvalue(ra + j);
-        //到此，base后参数就是期望的固定和变长参数（修正完毕）
+        //到此，base后参数就是期望的固定和变长参数（修正完毕）。固定参数再precall内完成处理
         vmbreak;
       }
       vmcase(OP_EXTRAARG) {
