@@ -449,7 +449,7 @@ static void callhook (lua_State *L, CallInfo *ci) {
 }
 
 
-//当一个函数接收变长参数时，这部分的参数是放在上一级数据栈帧尾部的。adjust_varargs
+//当一个函数接收变长参数时，这部分的参数是放在caller的数据栈帧尾部的。adjust_varargs
 //将需要个固定参数复制到被调用的函数的新一级数据栈帧上，而变长参数留在原地。
 //actual是实际传递了的参数个数
 static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
@@ -464,14 +464,16 @@ static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
   base = L->top;  /* final position of first argument */
   
   /* move fixed parameters to final position */
-  //将固定参数的slot移动到L->top
+  //将固定实参的slot移动到L->top
+  //为什么不直接用实参的slot，是因为固定实参不足和...可变实参不足后不匹配需要解决
   for (i = 0; i < nfixargs && i < actual; i++) {
     setobjs2s(L, L->top++, fixed + i);
     setnilvalue(fixed + i);  /* erase original copy (for GC) */
   }
-  //可变参函数形参不足情况，需要补nil
+  //考虑点：实参不足情况，需要补nil
   for (; i < nfixargs; i++)
     setnilvalue(L->top++);  /* complete missing arguments */
+  //那可变实参不足在哪里调整？请看OP_VARARG指令
   return base;
 }
 
@@ -548,6 +550,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       /* 如果有多个返回值，则从res指向的位置开始，依次往后面存放，同时更新栈指针L->top */
       for (i = 0; i < nres; i++)  /* move all results to correct place */
         setobjs2s(L, res + i, firstResult + i);
+        //由于是open call可变参返回值，所以以实际为准
       L->top = res + nres;
       return 0;  /* wanted == LUA_MULTRET */
     }
@@ -573,6 +576,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
   }
 
   /* 更新栈指针L->top，使其指向最后一个返回值的下一个栈单元 */
+  //由于是固定参数，所以已期望（字节码生成、编译字节码确定）为主
   L->top = res + wanted;  /* top points after the last result */
   return 1;
 }
@@ -583,7 +587,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
 ** moves current number of results to proper place; returns 0 iff call
 ** wanted multiple (variable number of) results.
 */
-/* 对当前函数调用做一些收尾工作，比如将函数返回值挪到适当位置，并退回到上一层函数调用中去。 */
+/* 对当前函数调用做一些收尾工作，比如将函数返回值挪到适当位置，修改了L->top，并退回到上一层函数调用（L->ci = ci->previous）中去。 */
 int luaD_poscall (lua_State *L, CallInfo *ci, StkId firstResult, int nres) {
   StkId res;
   /* 取出在函数调用之前保存在CallInfo对象中预期的函数返回值个数。 */
@@ -755,7 +759,8 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       //数据栈检查和增长
       checkstackp(L, fsize, func);
 
-      /* 判断函数是不是可变参函数 */
+      // 这可能是由一次 open call ，所调用的函数返回了不定数
+      // 量的参数；也可以是在 Lua 中用 ... 引用不定数量的参数，它会生成 VARARG 这个操作的字节码
       if (p->is_vararg)
         //可变参参数修正过程
         base = adjust_varargs(L, p, n);

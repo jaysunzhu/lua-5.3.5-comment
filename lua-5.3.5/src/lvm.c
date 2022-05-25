@@ -1454,8 +1454,10 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_VARARG) {
+        //期望返回的个数
         int b = GETARG_B(i) - 1;  /* required results */
         int j;
+        //实际可变参的实参个数。cast_int(base - ci->func)表示实参个数，cl->p->numparams是固定参数
         int n = cast_int(base - ci->func) - cl->p->numparams - 1;
         if (n < 0)  /* less arguments than parameters? */
           n = 0;  /* no vararg arguments */
@@ -1465,10 +1467,13 @@ void luaV_execute (lua_State *L) {
           ra = RA(i);  /* previous call may change the stack */
           L->top = ra + n;
         }
+        //转到ra上，ra是base+固定参数个数所指位置。
         for (j = 0; j < b && j < n; j++)
           setobjs2s(L, ra + j, base - n + j);
+        //可变实参不足，补nil
         for (; j < b; j++)  /* complete required results with nil */
           setnilvalue(ra + j);
+        //到此，base后参数就是期望的固定和变长参数（修正完毕）
         vmbreak;
       }
       vmcase(OP_EXTRAARG) {

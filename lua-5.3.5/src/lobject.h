@@ -541,10 +541,13 @@ typedef struct Proto {
   /* 函数原型中固定参数的数量 */
   lu_byte numparams;  /* number of fixed parameters */
   /* 该函数是不是可变参数的 */
+  // 这可能是由一次 open call ，所调用的函数返回了不定数
+  // 量的参数；也可以是在 Lua 中用 ... 引用不定数量的参数，它会生成 VARARG 这个操作的字节码
   lu_byte is_vararg;  
 
   /* 该函数所需要的函数栈的大小，函数的栈中会存放函数参数，函数内部定义的局部变量等。 */
-  //slot数量，包含了固定参数、局部变量。空函数情况下为2
+  //slot数量，包含了此proto的参数、局部变量以及proto中所有call函数中最大的实参。
+  //空函数情况下为2
   lu_byte maxstacksize;  /* number of registers needed by this function */
 
   /* Upvaldesc *upvalues数组的大小，即函数对应的Upvalue的个数。 */
