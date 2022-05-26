@@ -50,3 +50,25 @@
 | lua.c |  		| 解释器 | Lua stand-alone interpreter |
 | luac |      | 字节码编译器 | Lua compiler (saves bytecodes to files; also lists bytecodes) |
 
+### tt_和tt类型
+| 类型   	| 类型说明  | 数值 | 代码                         |
+| -------- 	| --------  | -------- 	| ---------------------------------------------- 			|
+| LUA_TNONE | 无类型 | -1 |      |
+| LUA_TNIL             | 空类型 | 0 |      |
+| LUA_TBOOLEAN         | 布尔类型 | 1 |      |
+| LUA_TLIGHTUSERDATA   | 指针类型(void *) | 2 |      |
+| LUA_TNUMBER          | 数字 | 3 |      |
+| LUA_TNUMFLT   | float | 3 | (LUA_TNUMBER \| (0 << 4)) |
+| LUA_TNUMINT | integer | 19 | (LUA_TNUMBER \| (1 << 4)) |
+| LUA_TSTRING          | 字符串类型 | 4 |      |
+| LUA_TSHRSTR          | 短字符串 | 4 | (LUA_TSTRING \| (0 << 4)) |
+| LUA_TLNGSTR          | 长字符串 | 20 | (LUA_TSTRING \| (1 << 4)) |
+| LUA_TTABLE         | 表类型           | 5    |                             |
+| LUA_TFUNCTION      | 函数类型 | 6 |      |
+| LUA_TLCL           | Lua closure      | 6    | (LUA_TFUNCTION \| (0 << 4)) |
+| LUA_TLCF           | light C function | 22   | (LUA_TFUNCTION \| (1 << 4)) |
+| LUA_TCCL           | C closure        | 38   | (LUA_TFUNCTION \| (2 << 4)) |
+| LUA_TUSERDATA      | 指针类型(void *) | 7    |                             |
+| LUA_TTHREAD        | Lua虚拟机、协程  | 8    |                             |
+|                    |                  |      |                             |
+|                    |                  |      |      |
