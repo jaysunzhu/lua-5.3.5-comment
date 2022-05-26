@@ -1234,10 +1234,11 @@ void luaV_execute (lua_State *L) {
         //OP_CALL时的ra是func slot
         //luaD_precall构建ci的函数参数，是通过L->top减func求出
         if (b != 0)
+        {
           //ra是准备call的func的slot，[ra,ra+b)对于就是func和实际传入的参数
           L->top = ra+b;
-        else
-          /* else previous instruction set top */
+        }
+        /* else previous instruction set top */
 
         if (luaD_precall(L, ra, nresults)) {  /* C function? */
           //如果函数是一个 C 函数，那么在 luaD_precall 完成后，函数已经调用完毕。如果不是 open call ，就需
@@ -1271,10 +1272,11 @@ void luaV_execute (lua_State *L) {
         // 栈，新的调用层次直接复用它们即可
         int b = GETARG_B(i);
         if (b != 0)
+        {
           //ra是准备call的func的slot，[ra,ra+b)对于就是func和实际传入的参数
           L->top = ra+b;
-        else
-          /* else previous instruction set top */
+        }
+        /* else previous instruction set top */
           
         //尾调用必须是一次 open call ，所以 C 必须为 0。对 luaD_precall 的调用，返回值参数个数也就写死为
         // LUA_MULTRET 了

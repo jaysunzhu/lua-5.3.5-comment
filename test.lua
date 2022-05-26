@@ -1,19 +1,11 @@
+function myPrint1(b)
+    local a = 1
+    local c = myPrint(a+b)
+end
 
-local b = 10
-function myPrint1(a)
-    if a == 0 then
-        return
-    end
-    -- print("myPrint1:"..a)
-    a = a - 1
-    return myPrint2(a)
+function myPrint(b)
+	local a = 1
+    return b
 end
-function myPrint2(a)
-    if a == 0 then
-        return
-    end
-    -- print("myPrint2:"..a)
-    a = a - 1
-    return myPrint1(a)
-end
-myPrint1(100)
+
+myPrint1(1)
