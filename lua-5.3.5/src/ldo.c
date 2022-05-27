@@ -936,8 +936,8 @@ static void unroll (lua_State *L, void *ud) {
       ** 对于Lua函数，分两步执行未完成的函数操作，首先是执行被中断的那条指令，然后才是执行
       ** 被中断指令的后续指令。
       */
-// 由于字节码的解析过程也可能因为触发元方法等情况调用 luaD_call 而从中间中断。 故需要先调用 luaV_finishOp
-// ，再交到 luaV_execute 来完成未尽的字节码
+      // 由于字节码的解析过程也可能因为触发元方法等情况调用 luaD_call 而从中间中断。 故需要先调用 luaV_finishOp
+      // ，再交到 luaV_execute 来完成未尽的字节码
       luaV_finishOp(L);  /* finish interrupted instruction */
       luaV_execute(L);  /* execute down to higher C 'boundary' */
     }
@@ -1063,8 +1063,8 @@ static void resume (lua_State *L, void *ud) {
       luaD_poscall(L, ci, firstArg, n);  /* finish 'luaD_precall' */
     }
     
-// 因为之前完整的调用层次，包含在 L 的 CallInfo
-// 中，而不是存在于当前的 C 调用栈上。如果检查到 Lua 的调用栈上有未尽的工作，必须完成它
+    // 因为之前完整的调用层次，包含在 L 的 CallInfo
+    // 中，而不是存在于当前的 C 调用栈上。如果检查到 Lua 的调用栈上有未尽的工作，必须完成它
     unroll(L, NULL);  /* run continuation */
   }
 }

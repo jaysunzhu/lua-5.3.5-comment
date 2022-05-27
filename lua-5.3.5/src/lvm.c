@@ -694,6 +694,9 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
 ** 恢复执行被中断函数中被中断的那条指令。执行完被中断的那条指令后，
 ** 才会调用luaV_execute()执行后续未执行的指令，参考unroll()函数。
 */
+
+// 为了让 C 中的 yield 跳出协程后，还可以回来继续执行虚拟机中的字节码。光是依靠 savedpc 记住当前
+// 的指令位置是不够的。我们还需要利用 luaV_finishOp 来补全被中断的操作未做完的事情
 void luaV_finishOp (lua_State *L) {
 
   /* 获取当前执行函数（被中断刚恢复）对应的函数调用信息，以及函数的栈基址 */

@@ -36,9 +36,11 @@
 ** cost of sweeping one element (the size of a small object divided
 ** by some adjust for the sweep speed)
 */
+//32位 5
 #define GCSWEEPCOST	((sizeof(TString) + 4) / 4)
 
 /* maximum number of elements to sweep in each single step */
+//32位 80个短字符串
 #define GCSWEEPMAX	(cast_int((GCSTEPSIZE / GCSWEEPCOST) / 4))
 
 /* cost of calling one finalizer */
@@ -63,14 +65,17 @@
 ** 'makewhite' erases all color bits then sets only the current white
 ** bit
 */
+//1111000。&与运算，去掉黑、白色
 #define maskcolors	(~(bitmask(BLACKBIT) | WHITEBITS))
+//设置为currentwhite 白色
 #define makewhite(g,x)	\
  (x->marked = cast_byte((x->marked & maskcolors) | luaC_white(g)))
-
+//去掉白色，即进入灰色
 #define white2gray(x)	resetbits(x->marked, WHITEBITS)
+//去掉黑色，即进入灰色
 #define black2gray(x)	resetbit(x->marked, BLACKBIT)
 
-
+//可回收类型并且是白色
 #define valiswhite(x)   (iscollectable(x) && iswhite(gcvalue(x)))
 
 #define checkdeadkey(n)	lua_assert(!ttisdeadkey(gkey(n)) || ttisnil(gval(n)))
@@ -152,6 +157,8 @@ static int iscleared (global_State *g, const TValue *o) {
 ** object to white [sweep it] to avoid other barrier calls for this
 ** same object.)
 */
+//o是black object，v是while object
+//
 void luaC_barrier_ (lua_State *L, GCObject *o, GCObject *v) {
   global_State *g = G(L);
   lua_assert(isblack(o) && iswhite(v) && !isdead(g, v) && !isdead(g, o));
@@ -746,6 +753,7 @@ static GCObject **sweeplist (lua_State *L, GCObject **p, lu_mem count);
 ** collection cycle. Return where to continue the traversal or NULL if
 ** list is finished.
 */
+//count 正常已短字符串 80来算
 static GCObject **sweeplist (lua_State *L, GCObject **p, lu_mem count) {
   global_State *g = G(L);
   int ow = otherwhite(g);
@@ -753,6 +761,7 @@ static GCObject **sweeplist (lua_State *L, GCObject **p, lu_mem count) {
   while (*p != NULL && count-- > 0) {
     GCObject *curr = *p;
     int marked = curr->marked;
+    //marked和otherwhile相符，就需要清理
     if (isdeadm(ow, marked)) {  /* is 'curr' dead? */
       *p = curr->next;  /* remove 'curr' from list */
       freeobj(L, curr);  /* erase 'curr' */

@@ -782,7 +782,7 @@ static int pmain (lua_State *L) {
   return 1;
 }
 
-
+#include "lgc.h"
 int main (int argc, char **argv) {
   int status, result;
   /* 主要是创建和初始化主线程对应的lua_State状态信息和由全部thread共享的lua_State状态信息 */

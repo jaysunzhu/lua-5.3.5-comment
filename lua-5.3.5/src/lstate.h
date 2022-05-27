@@ -219,6 +219,7 @@ typedef struct global_State {
 
   /* lua中进行hash操作时的随机种子，例如给字符串对象进行hash时，会使用该成员的值。 */
   unsigned int seed;  /* randomized seed for hashes */
+  //1、lua_newstate 设置为 WHILE0(为1)。2、在atomic原子Mark阶段 转换otherwhile。3、close_state，设置为两种白(为3)
   lu_byte currentwhite;
   lu_byte gcstate;  /* state of garbage collector */
   lu_byte gckind;  /* kind of GC running */
@@ -227,6 +228,7 @@ typedef struct global_State {
   /* allgc用来链接所有需要进行内存回收（GC）的对象。 */
   GCObject *allgc;  /* list of all collectable objects */
   GCObject **sweepgc;  /* current position of sweep in list */
+  //finalizers是含有元表的table和userdata的列表
   GCObject *finobj;  /* list of collectable objects with finalizers */
   GCObject *gray;  /* list of gray objects */
   GCObject *grayagain;  /* list of objects to be traversed atomically */
@@ -405,18 +407,11 @@ struct lua_State {
 ** 这个类型其实就只包含了CommonHeader，因此对于一个类型为union GCUnion的值，该值的
 ** 内存中最开始都包含了CommonHeader，而不管该值是union GCUnion中哪一种具体的类型。
 ** 因此可以利用这一特性来做类型转换。
-** lua中为什么这么做呢？我的理解是为了实现对需要进行GC的类型进行统一管理，比如我们要申请
-** 一个需要进行GC的类型的对象，由于需要进行GC的类型很多，我们不可能为每中类型都创建申请接口，
-** 这样就会有很多冗余代码。因为在申请一个需要进行GC的类型的对象时，我们统一转换为申请一个GCObject
-** 类型的对象，申请的同时传入具体的某个类型以及所需要的内存大小。这样在申请完GCObject对象时，
-** 我们就可以按需转换为我们所需要的某个类型。因为大家的头部都一样，多出来的就是某个类型自己私有
-** 的东西了。
-** GCUnion联合体所有可能的类型的对象的地址都和类型为GCObject的gc的地址一样。
 */
 union GCUnion {
   GCObject gc;  /* common header */
   struct TString ts;
-  struct Udata u;
+  struct Udata u; //UserData
   union Closure cl;
   struct Table h;
   struct Proto p;

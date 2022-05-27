@@ -107,13 +107,9 @@ typedef struct GCObject GCObject;
 ** Common Header for all collectable objects (in macro form, to be
 ** included in other objects)
 */
-/*
-** 需要进行GC操作的数据类型都会有一个CommonHeader宏定义的成员，并且
-** 该成员在结构体定义的最开始部分。
-** next成员用于指向下一个GC链表的成员。
-** tt表示数据类型，即lua.h中的那些宏。
-** marked表示GC相关的标记位。
-*/
+// next：在allgc链表中，指定下一个gc对象的指针
+// tt_：记录gc对象的类型，不同的gc对象在propagate阶段有不同的处理逻辑
+// marked：用来标记gc对象颜色用的，默认是currentwhite
 #define CommonHeader	GCObject *next; lu_byte tt; lu_byte marked
 
 
@@ -222,20 +218,27 @@ typedef struct lua_TValue {
 
 
 /* Macros to access values */
+//获取TValue中的参数，基础类型和GC类型
 #define ivalue(o)	check_exp(ttisinteger(o), val_(o).i)
 #define fltvalue(o)	check_exp(ttisfloat(o), val_(o).n)
+//数字类型分为整形和浮点，nvalue返回数字类型
 #define nvalue(o)	check_exp(ttisnumber(o), \
 	(ttisinteger(o) ? cast_num(ivalue(o)) : fltvalue(o)))
 #define gcvalue(o)	check_exp(iscollectable(o), val_(o).gc)
+//lightuserdata
 #define pvalue(o)	check_exp(ttislightuserdata(o), val_(o).p)
 
-/* tsvalue()用于获取UTString对象 */
+//tsvalue用于获取UTString对象
 #define tsvalue(o)	check_exp(ttisstring(o), gco2ts(val_(o).gc))
 #define uvalue(o)	check_exp(ttisfulluserdata(o), gco2u(val_(o).gc))
 #define clvalue(o)	check_exp(ttisclosure(o), gco2cl(val_(o).gc))
+//Lclosure
 #define clLvalue(o)	check_exp(ttisLclosure(o), gco2lcl(val_(o).gc))
+//Cclosure
 #define clCvalue(o)	check_exp(ttisCclosure(o), gco2ccl(val_(o).gc))
+//light C function
 #define fvalue(o)	check_exp(ttislcf(o), val_(o).f)
+
 #define hvalue(o)	check_exp(ttistable(o), gco2t(val_(o).gc))
 #define bvalue(o)	check_exp(ttisboolean(o), val_(o).b)
 #define thvalue(o)	check_exp(ttisthread(o), gco2th(val_(o).gc))

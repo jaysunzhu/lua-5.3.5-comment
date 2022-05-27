@@ -402,6 +402,9 @@ LUALIB_API int luaL_checkoption (lua_State *L, int arg, const char *def,
 ** this extra space, Lua will generate the same 'stack overflow' error,
 ** but without 'msg'.)
 */
+// Lua 的栈不像 C 语言的栈那样，不大考虑栈溢出的情况。Lua 栈给 C 函数留的默认空间很
+// 小，默认情况下只有 20 。当你要在 Lua 的栈上留下大量值时，务必用 luaL_checkstack 扩展堆栈。因为处
+// 于性能考虑，Lua 和栈有关的 API 都是不检查栈溢出的情况的
 LUALIB_API void luaL_checkstack (lua_State *L, int space, const char *msg) {
   if (!lua_checkstack(L, space)) {
     if (msg)
@@ -811,7 +814,11 @@ static int errfile (lua_State *L, const char *what, int fnameindex) {
 ** UTF-8、UTF16或UTF-32编码文件开头的特殊标记，用来标记多字节编码
 ** 文件的编码类型和字节顺序（big-endian或little- endian）。一般用
 ** 来识别文件的编码类型。
-** skipBOM函数就是要跳过lua源文件开头的BOM，并返回BOM后的第一个有效
+** skipB
+O
+M
+
+函数就是要跳过lua源文件开头的BOM，并返回BOM后的第一个有效
 ** 字符
 */
 static int skipBOM (LoadF *lf) {
