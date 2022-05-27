@@ -415,6 +415,7 @@ typedef struct TString {
     struct TString *hnext;  /* linked list for hash table */
   } u;
   //内存对象模型中，TString后长度为len+1的空间就是字符串所在内存
+  char *temp;//debug使用
 } TString;
 
 
@@ -506,10 +507,15 @@ typedef union UUdata {
 */
 /* lua函数自由变量描述信息 */
 typedef struct Upvaldesc {
+  //当外层函数并没有退出时，我们调用刚生成的闭包，这个时候闭包更像一个普通的内嵌函数。外层函数
+  // 的局部变量只是数据栈上的一个普通变量，虚拟机用一个数据栈上的索引映射局部变量，内嵌函数可以通过
+  // 数据栈自由访问它。而一旦外层函数返回，数据栈空间收缩，原有的局部变量消失了。这个时候闭包需要用
+  // 其它方式访问这些 upvalue 。
+  
   TString *name;  /* upvalue name (for debug information) */
-  //是否在stack上,_ENV必定不在栈上
+  //是否在stack上。instack是再parser就确定了。_ENV必定不在栈上
   lu_byte instack;  /* whether it is in stack (register) */
-  //instack==true, base+idx地址获得，否则在outer function's list，encup[idx]
+  //instack==true, base+idx地址获得，否则在outer function's list，encup[idx]，可参考getcached
   lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */
 } Upvaldesc;
 
@@ -585,9 +591,12 @@ typedef struct Proto {
 
   /* locvars存放了该函数使用到的本地变量（即在函数内部定义的局部变量）信息（仅用于debug） */
   LocVar *locvars;  /* information about local variables (debug information) */
+  //那局部变量放在哪里？在L的数据栈上
 
   /* upvalues指向存放了该函数使用到的所有自由变量的内存地址 */
+  //由于proto的upvalue可能不一样，所以数据放到LClosure
   Upvaldesc *upvalues;  /* upvalue information */
+  
   //只保留最近的一个Lua Closure
   struct LClosure *cache;  /* last-created closure with this prototype */
   TString  *source;  /* used for debug information */
@@ -626,6 +635,7 @@ typedef struct LClosure {
   struct Proto *p; /* 存放lua闭包对应的函数原型信息 */
 
 	/* lua闭包所使用的自由变量列表 */
+  
   //Lua Closure对象的upval有两种来源，
   //第一、Lua 闭包一般在虚拟机运行的过程中被动态构造出来的。这时，闭包需引用的 upval 都在当前
   //的数据栈上, 利用 luaF_findupval 可以把数据栈上的值转换为 upval

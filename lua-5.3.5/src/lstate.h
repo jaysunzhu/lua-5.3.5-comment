@@ -237,6 +237,7 @@ typedef struct global_State {
   
   /* 用于保存不被GC回收的对象，如lua中关键字对应的TString对象，元方法对应的TString对象等等 */
   GCObject *fixedgc;  /* list of objects not to be collected */
+  
   struct lua_State *twups;  /* list of threads with open upvalues */
   unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
   int gcpause;  /* size of pause between successive GCs */
@@ -332,8 +333,11 @@ struct lua_State {
 
   /* 栈的起始地址 */
   StkId stack;  /* stack base */
+  //插入数据来源数据栈stack，而且还是比较新（即slot就高）。由于插入到头部缘故，所以openupval的头是对于stack的高地址部分
   UpVal *openupval;  /* list of open upvalues in this stack */
   GCObject *gclist;
+
+  //初始状态就是当前L，表示为 thread has no upvalues 
   struct lua_State *twups;  /* list of threads with open upvalues */
 
   /*

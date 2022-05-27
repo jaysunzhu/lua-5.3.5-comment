@@ -1,11 +1,13 @@
-function myPrint1(b)
-    local a = 1
-    local c = myPrint(a+b)
+local a = 1
+local b = 1
+function myPrint1(c)
+
+    local c = myPrint(a+c)
 end
 
-function myPrint(b)
-	local a = 1
-    return b
+function myPrint(c)
+	b = 10
+    return c
 end
 
 myPrint1(1)

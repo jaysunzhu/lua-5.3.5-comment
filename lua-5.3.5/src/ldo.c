@@ -252,6 +252,7 @@ int luaD_rawrunprotected (lua_State *L, Pfunc f, void *ud) {
 ** 根据旧栈和新栈的地址差来校正线程状态信息lua_State中某些信息的地址。
 ** oldstack指向的是旧栈的起始地址。
 */
+//由于数据栈是通过luaM_reallocvector接口，所以L->stack地址会改变
 //修正的位置包括 upvalue以及执行栈(调用栈)对数据栈的引用
 static void correctstack (lua_State *L, TValue *oldstack) {
   CallInfo *ci;
@@ -259,10 +260,12 @@ static void correctstack (lua_State *L, TValue *oldstack) {
   
   /* 新栈的栈指针 */
   //stack top指针调整
+  //算法 新指针=L->stack新地址+旧的距离
   L->top = (L->top - oldstack) + L->stack;
-  //upvalue
+  //upvalue 为open时候，open的upvalue数据在栈上
   for (up = L->openupval; up != NULL; up = up->u.open.next)
     up->v = (up->v - oldstack) + L->stack;
+  
   //执行栈(调用栈)对数据栈的引用
   for (ci = L->ci; ci != NULL; ci = ci->previous) {
     ci->top = (ci->top - oldstack) + L->stack;
@@ -529,6 +532,7 @@ static void tryfuncTM (lua_State *L, StkId func) {
 */
 //nres是被调用函数实际返回值个数，wanted是调用函数预期的返回值
 //res就是被调用函数func对应的slot
+//返回值为0，期望为LUA_MULTRET（-1），其他情况返回1
 static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
                                       int nres, int wanted) {
   switch (wanted) {  /* handle typical cases separately */
@@ -540,7 +544,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       if (nres == 0)   /* no results? */
         firstResult = luaO_nilobject;  /* adjust with nil */
 
-	  /* 将函数执行结果设置到res指向的栈单元。 */
+	  /* 将函数执行结果设置到res指向的栈单元（当前CI的Func位置）。 */
       setobjs2s(L, res, firstResult);  /* move it to proper place */
       break;
     }
@@ -567,6 +571,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       }
       else {  /* not enough results; use all of them plus nils */
         for (i = 0; i < nres; i++)  /* move all results to correct place */
+          //将函数执行结果设置到res指向的栈单元（当前CI的Func位置）
           setobjs2s(L, res + i, firstResult + i);
         for (; i < wanted; i++)  /* complete wanted number of results */
           setnilvalue(res + i);

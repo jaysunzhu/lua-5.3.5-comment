@@ -639,7 +639,8 @@ lua_Integer luaV_shiftl (lua_Integer x, lua_Integer y) {
 ** whether there is a cached closure with the same upvalues needed by
 ** new closure to be created.
 */
-//检查proto 结构中LClosure唯一的cache，需要每个upval地址相同
+//检查proto 结构中LClosure有且只有1个的cache，需要每个upval地址相同
+//encup是存放LClosure中的enclosing upvalue
 static LClosure *getcached (Proto *p, UpVal **encup, StkId base) {
   LClosure *c = p->cache;
   if (c != NULL) {  /* is there a cached closure? */
@@ -662,6 +663,7 @@ static LClosure *getcached (Proto *p, UpVal **encup, StkId base) {
 ** already black (which means that 'cache' was already cleared by the
 ** GC).
 */
+//encup是存放LClosure中的enclosing upvalue
 static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
                          StkId ra) {
   int nup = p->sizeupvalues;
@@ -669,7 +671,9 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
   int i;
   LClosure *ncl = luaF_newLclosure(L, nup);
   ncl->p = p;
+  //lua Closure 放到ra上
   setclLvalue(L, ra, ncl);  /* anchor new closure in stack */
+  
   for (i = 0; i < nup; i++) {  /* fill in its upvalues */
     if (uv[i].instack)  /* upvalue refers to local variable? */
       ncl->upvals[i] = luaF_findupval(L, base + uv[i].idx);
@@ -1449,6 +1453,8 @@ void luaV_execute (lua_State *L) {
           c = GETARG_Ax(*ci->u.l.savedpc++);
         }
         h = hvalue(ra);
+
+        // lua代码 local t = {...}，将可变参放入到table的array中
         last = ((c-1)*LFIELDS_PER_FLUSH) + n;
         if (last > h->sizearray)  /* needs more space? */
           luaH_resizearray(L, h, last);  /* preallocate it at once */
@@ -1462,6 +1468,7 @@ void luaV_execute (lua_State *L) {
       }
       vmcase(OP_CLOSURE) {//Lua Closure指令
         Proto *p = cl->p->p[GETARG_Bx(i)];
+        //有且只有1个cache，需要每个upval地址相同
         LClosure *ncl = getcached(p, cl->upvals, base);  /* cached closure */
         if (ncl == NULL)  /* no match? */
           pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */
