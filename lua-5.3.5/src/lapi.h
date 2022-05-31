@@ -14,6 +14,7 @@
 #define api_incr_top(L)   {L->top++; api_check(L, L->top <= L->ci->top, \
 				"stack overflow");}
 
+//针对可变长返回值LUA_MULTRET进行top操作
 #define adjustresults(L,nres) \
     { if ((nres) == LUA_MULTRET && L->ci->top < L->top) L->ci->top = L->top; }
 

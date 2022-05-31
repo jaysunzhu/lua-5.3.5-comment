@@ -394,6 +394,7 @@ static void PrintCode(const Proto* f)
  }
 }
 
+//英语单复数单词需要末尾加s
 #define SS(x)	((x==1)?"":"s")
 #define S(x)	(int)(x),SS(x)
 

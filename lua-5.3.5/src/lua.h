@@ -83,9 +83,12 @@ typedef struct lua_State lua_State;
 #define LUA_TBOOLEAN		1		// 布尔类型
 #define LUA_TLIGHTUSERDATA	2		// 指针类型(void *)
 #define LUA_TNUMBER		3		// 数据类型
+//LUA_TNUMFLT(float) 3,LUA_TNUMINT(integer) 19
 #define LUA_TSTRING		4		// 字符串类型
+//LUA_TSHRSTR 4,LUA_TLNGSTR 20
 #define LUA_TTABLE		5		// 表类型
 #define LUA_TFUNCTION		6		// 函数类型
+//LUA_TLCL(Lua closure) 6,LUA_TLCF(light C function) 22,LUA_TCCL(C closure) 38
 #define LUA_TUSERDATA		7		// 指针类型(void *)
 #define LUA_TTHREAD		8		// Lua虚拟机、协程
 

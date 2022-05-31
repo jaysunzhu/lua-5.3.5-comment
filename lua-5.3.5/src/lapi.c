@@ -648,20 +648,17 @@ LUA_API const char *lua_pushfstring (lua_State *L, const char *fmt, ...) {
 
 /*
 ** lua_pushcclosure()将函数指针压入栈顶，分两种情况：
-** 1. 如果是light c closure，那么直接将函数指针压入栈顶；
-** 2. 如果是带有upvalue的c closure，那么需要创建一个CClosure对象，并
-**    将函数指针保存到CClosure对象中，以及将该函数的所有upvalue也存放
-**    到CClosure对象的upvalue数组成员中，然后将CClosure对象压入到该函数
-**    第一个upvalue所在的堆栈位置（此时也就是堆栈的第一个元素），由于原先
-**    存放在堆栈中的upvalue都已经存放到CClosure对象中了，因此覆盖也没关系。
+** 1. n为0，没有upvalue，就是light C function，那么直接将函数指针压入栈顶；
+** 2. 如果是带有upvalue的c closure，那么需要创建一个CClosure对象。
 */
+//n是upvalue 的数量
 LUA_API void lua_pushcclosure (lua_State *L, lua_CFunction fn, int n) {
   lua_lock(L);
+
   if (n == 0) {
-    /*
-    ** 进入这个分支，说明函数没有upvalue，是一个light c closure，对于这种函数，
-    ** 直接将函数指针压入栈顶，栈顶指针+1，堆栈增长。
-    */
+    //n为0，没有upvalue，就是light C function
+
+    //放到TValue的f中，not gcobject
     setfvalue(L->top, fn);
     api_incr_top(L);
   }
@@ -680,21 +677,13 @@ LUA_API void lua_pushcclosure (lua_State *L, lua_CFunction fn, int n) {
 	
     cl = luaF_newCclosure(L, n);
     cl->f = fn;
-	/* 
-	** L->top -= n执行后，L->top指向了该函数的第一个upvalue，然后将upvalue
-	** 依次将upvalue保存到C Closure对象的upvalue数组中
-	*/
+
     L->top -= n;
     while (n--) {
       setobj2n(L, &cl->upvalue[n], L->top + n);
       /* does not need barrier because closure is white */
     }
-    /*
-    ** 将CClosure对象压入堆栈，注意到，上面执行了语句“L->top -= n;”，因此这个时候的
-    ** L->top其实指向了函数的第一个upvalue，那么这里将CClosure对象压入堆栈的话，CClosure
-    ** 对象就覆盖了函数的第一个upvalue，但是由于函数的upvalue都保存到了CClosure中，所以没关系。
-    ** CClosure对象压入堆栈后，堆栈增加，栈顶+1。
-    */
+
     setclCvalue(L, L->top, cl);
     api_incr_top(L);
     luaC_checkGC(L);
@@ -1286,7 +1275,8 @@ LUA_API int lua_pcallk (lua_State *L, int nargs, int nresults, int errfunc,
     L->errfunc = ci->u.c.old_errfunc;
     status = LUA_OK;  /* if it is here, there were no errors */
   }
-  
+
+  //针对可变长返回值LUA_MULTRET进行top操作
   adjustresults(L, nresults);
   lua_unlock(L);
   return status;

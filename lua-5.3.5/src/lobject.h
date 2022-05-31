@@ -107,13 +107,9 @@ typedef struct GCObject GCObject;
 ** Common Header for all collectable objects (in macro form, to be
 ** included in other objects)
 */
-/*
-** 需要进行GC操作的数据类型都会有一个CommonHeader宏定义的成员，并且
-** 该成员在结构体定义的最开始部分。
-** next成员用于指向下一个GC链表的成员。
-** tt表示数据类型，即lua.h中的那些宏。
-** marked表示GC相关的标记位。
-*/
+// next：在allgc链表中，指定下一个gc对象的指针
+// tt_：记录gc对象的类型，不同的gc对象在propagate阶段有不同的处理逻辑
+// marked：用来标记gc对象颜色用的，默认是currentwhite
 #define CommonHeader	GCObject *next; lu_byte tt; lu_byte marked
 
 
@@ -222,20 +218,27 @@ typedef struct lua_TValue {
 
 
 /* Macros to access values */
+//获取TValue中的参数，基础类型和GC类型
 #define ivalue(o)	check_exp(ttisinteger(o), val_(o).i)
 #define fltvalue(o)	check_exp(ttisfloat(o), val_(o).n)
+//数字类型分为整形和浮点，nvalue返回数字类型
 #define nvalue(o)	check_exp(ttisnumber(o), \
 	(ttisinteger(o) ? cast_num(ivalue(o)) : fltvalue(o)))
 #define gcvalue(o)	check_exp(iscollectable(o), val_(o).gc)
+//lightuserdata
 #define pvalue(o)	check_exp(ttislightuserdata(o), val_(o).p)
 
-/* tsvalue()用于获取UTString对象 */
+//tsvalue用于获取UTString对象
 #define tsvalue(o)	check_exp(ttisstring(o), gco2ts(val_(o).gc))
 #define uvalue(o)	check_exp(ttisfulluserdata(o), gco2u(val_(o).gc))
 #define clvalue(o)	check_exp(ttisclosure(o), gco2cl(val_(o).gc))
+//Lclosure
 #define clLvalue(o)	check_exp(ttisLclosure(o), gco2lcl(val_(o).gc))
+//Cclosure
 #define clCvalue(o)	check_exp(ttisCclosure(o), gco2ccl(val_(o).gc))
+//light C function
 #define fvalue(o)	check_exp(ttislcf(o), val_(o).f)
+
 #define hvalue(o)	check_exp(ttistable(o), gco2t(val_(o).gc))
 #define bvalue(o)	check_exp(ttisboolean(o), val_(o).b)
 #define thvalue(o)	check_exp(ttisthread(o), gco2th(val_(o).gc))
@@ -415,6 +418,7 @@ typedef struct TString {
     struct TString *hnext;  /* linked list for hash table */
   } u;
   //内存对象模型中，TString后长度为len+1的空间就是字符串所在内存
+  char *temp;//debug使用
 } TString;
 
 
@@ -506,10 +510,15 @@ typedef union UUdata {
 */
 /* lua函数自由变量描述信息 */
 typedef struct Upvaldesc {
+  //当外层函数并没有退出时，我们调用刚生成的闭包，这个时候闭包更像一个普通的内嵌函数。外层函数
+  // 的局部变量只是数据栈上的一个普通变量，虚拟机用一个数据栈上的索引映射局部变量，内嵌函数可以通过
+  // 数据栈自由访问它。而一旦外层函数返回，数据栈空间收缩，原有的局部变量消失了。这个时候闭包需要用
+  // 其它方式访问这些 upvalue 。
+  
   TString *name;  /* upvalue name (for debug information) */
-  //是否在stack上,_ENV必定不在栈上
+  //是否在stack上。instack是再parser就确定了。_ENV必定不在栈上
   lu_byte instack;  /* whether it is in stack (register) */
-  //instack==true, base+idx地址获得，否则在outer function's list，encup[idx]
+  //instack==true, base+idx地址获得，否则在outer function's list，encup[idx]，可参考getcached
   lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */
 } Upvaldesc;
 
@@ -541,10 +550,13 @@ typedef struct Proto {
   /* 函数原型中固定参数的数量 */
   lu_byte numparams;  /* number of fixed parameters */
   /* 该函数是不是可变参数的 */
+  // 这可能是由一次 open call ，所调用的函数返回了不定数
+  // 量的参数；也可以是在 Lua 中用 ... 引用不定数量的参数，它会生成 VARARG 这个操作的字节码
   lu_byte is_vararg;  
 
   /* 该函数所需要的函数栈的大小，函数的栈中会存放函数参数，函数内部定义的局部变量等。 */
-  //slot数量，包含了固定参数、局部变量。空函数情况下为2
+  //slot数量，包含了此proto的参数、局部变量以及proto中所有call函数中最多的实参和对于1个cl，不含upvalue。
+  //空函数情况下为2
   lu_byte maxstacksize;  /* number of registers needed by this function */
 
   /* Upvaldesc *upvalues数组的大小，即函数对应的Upvalue的个数。 */
@@ -582,9 +594,12 @@ typedef struct Proto {
 
   /* locvars存放了该函数使用到的本地变量（即在函数内部定义的局部变量）信息（仅用于debug） */
   LocVar *locvars;  /* information about local variables (debug information) */
+  //那局部变量放在哪里？在L的数据栈上
 
   /* upvalues指向存放了该函数使用到的所有自由变量的内存地址 */
+  //由于proto的upvalue可能不一样，所以数据放到LClosure
   Upvaldesc *upvalues;  /* upvalue information */
+  
   //只保留最近的一个Lua Closure
   struct LClosure *cache;  /* last-created closure with this prototype */
   TString  *source;  /* used for debug information */
@@ -623,6 +638,7 @@ typedef struct LClosure {
   struct Proto *p; /* 存放lua闭包对应的函数原型信息 */
 
 	/* lua闭包所使用的自由变量列表 */
+  
   //Lua Closure对象的upval有两种来源，
   //第一、Lua 闭包一般在虚拟机运行的过程中被动态构造出来的。这时，闭包需引用的 upval 都在当前
   //的数据栈上, 利用 luaF_findupval 可以把数据栈上的值转换为 upval

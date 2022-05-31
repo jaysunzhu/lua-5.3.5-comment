@@ -252,6 +252,7 @@ int luaD_rawrunprotected (lua_State *L, Pfunc f, void *ud) {
 ** 根据旧栈和新栈的地址差来校正线程状态信息lua_State中某些信息的地址。
 ** oldstack指向的是旧栈的起始地址。
 */
+//由于数据栈是通过luaM_reallocvector接口，所以L->stack地址会改变
 //修正的位置包括 upvalue以及执行栈(调用栈)对数据栈的引用
 static void correctstack (lua_State *L, TValue *oldstack) {
   CallInfo *ci;
@@ -259,10 +260,12 @@ static void correctstack (lua_State *L, TValue *oldstack) {
   
   /* 新栈的栈指针 */
   //stack top指针调整
+  //算法 新指针=L->stack新地址+旧的距离
   L->top = (L->top - oldstack) + L->stack;
-  //upvalue
+  //upvalue 为open时候，open的upvalue数据在栈上
   for (up = L->openupval; up != NULL; up = up->u.open.next)
     up->v = (up->v - oldstack) + L->stack;
+  
   //执行栈(调用栈)对数据栈的引用
   for (ci = L->ci; ci != NULL; ci = ci->previous) {
     ci->top = (ci->top - oldstack) + L->stack;
@@ -449,7 +452,7 @@ static void callhook (lua_State *L, CallInfo *ci) {
 }
 
 
-//当一个函数接收变长参数时，这部分的参数是放在上一级数据栈帧尾部的。adjust_varargs
+//当一个函数接收变长参数时，这部分的参数是放在caller的数据栈帧尾部的。adjust_varargs
 //将需要个固定参数复制到被调用的函数的新一级数据栈帧上，而变长参数留在原地。
 //actual是实际传递了的参数个数
 static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
@@ -464,14 +467,16 @@ static StkId adjust_varargs (lua_State *L, Proto *p, int actual) {
   base = L->top;  /* final position of first argument */
   
   /* move fixed parameters to final position */
-  //将固定参数的slot移动到L->top
+  //将固定实参的slot移动到L->top
+  //为什么不直接用实参的slot，是因为固定实参不足和...可变实参不足后不匹配需要解决
   for (i = 0; i < nfixargs && i < actual; i++) {
     setobjs2s(L, L->top++, fixed + i);
     setnilvalue(fixed + i);  /* erase original copy (for GC) */
   }
-  //可变参函数形参不足情况，需要补nil
+  //考虑点：实参不足情况，需要补nil
   for (; i < nfixargs; i++)
     setnilvalue(L->top++);  /* complete missing arguments */
+  //那可变实参不足在哪里调整？请看OP_VARARG指令
   return base;
 }
 
@@ -527,6 +532,7 @@ static void tryfuncTM (lua_State *L, StkId func) {
 */
 //nres是被调用函数实际返回值个数，wanted是调用函数预期的返回值
 //res就是被调用函数func对应的slot
+//返回值为0，期望为LUA_MULTRET（-1），其他情况返回1
 static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
                                       int nres, int wanted) {
   switch (wanted) {  /* handle typical cases separately */
@@ -538,7 +544,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       if (nres == 0)   /* no results? */
         firstResult = luaO_nilobject;  /* adjust with nil */
 
-	  /* 将函数执行结果设置到res指向的栈单元。 */
+	  /* 将函数执行结果设置到res指向的栈单元（当前CI的Func位置）。 */
       setobjs2s(L, res, firstResult);  /* move it to proper place */
       break;
     }
@@ -548,6 +554,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       /* 如果有多个返回值，则从res指向的位置开始，依次往后面存放，同时更新栈指针L->top */
       for (i = 0; i < nres; i++)  /* move all results to correct place */
         setobjs2s(L, res + i, firstResult + i);
+        //由于是open call可变参返回值，所以以实际为准
       L->top = res + nres;
       return 0;  /* wanted == LUA_MULTRET */
     }
@@ -564,6 +571,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
       }
       else {  /* not enough results; use all of them plus nils */
         for (i = 0; i < nres; i++)  /* move all results to correct place */
+          //将函数执行结果设置到res指向的栈单元（当前CI的Func位置）
           setobjs2s(L, res + i, firstResult + i);
         for (; i < wanted; i++)  /* complete wanted number of results */
           setnilvalue(res + i);
@@ -573,6 +581,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
   }
 
   /* 更新栈指针L->top，使其指向最后一个返回值的下一个栈单元 */
+  //由于是固定参数，所以已期望（字节码生成、编译字节码确定）为主
   L->top = res + wanted;  /* top points after the last result */
   return 1;
 }
@@ -583,7 +592,7 @@ static int moveresults (lua_State *L, const TValue *firstResult, StkId res,
 ** moves current number of results to proper place; returns 0 iff call
 ** wanted multiple (variable number of) results.
 */
-/* 对当前函数调用做一些收尾工作，比如将函数返回值挪到适当位置，并退回到上一层函数调用中去。 */
+/* 对当前函数调用做一些收尾工作，比如将函数返回值挪到适当位置，修改了L->top，并退回到上一层函数调用（L->ci = ci->previous）中去。 */
 int luaD_poscall (lua_State *L, CallInfo *ci, StkId firstResult, int nres) {
   StkId res;
   /* 取出在函数调用之前保存在CallInfo对象中预期的函数返回值个数。 */
@@ -756,7 +765,8 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       //数据栈检查和增长
       checkstackp(L, fsize, func);
 
-      /* 判断函数是不是可变参函数 */
+      // 这可能是由一次 open call ，所调用的函数返回了不定数
+      // 量的参数；也可以是在 Lua 中用 ... 引用不定数量的参数，它会生成 VARARG 这个操作的字节码
       if (p->is_vararg)
         //可变参参数修正过程
         base = adjust_varargs(L, p, n);
@@ -771,6 +781,7 @@ int luaD_precall (lua_State *L, StkId func, int nresults) {
       }
 
       /* 从lua_State的ci链表中获取一个CallInfo节点，用于存放当前函数调用的信息 */
+      // L->ci同时更新
       ci = next_ci(L);  /* now 'enter' new function */
       ci->nresults = nresults;
       ci->func = func;
@@ -926,8 +937,8 @@ static void unroll (lua_State *L, void *ud) {
       ** 对于Lua函数，分两步执行未完成的函数操作，首先是执行被中断的那条指令，然后才是执行
       ** 被中断指令的后续指令。
       */
-// 由于字节码的解析过程也可能因为触发元方法等情况调用 luaD_call 而从中间中断。 故需要先调用 luaV_finishOp
-// ，再交到 luaV_execute 来完成未尽的字节码
+      // 由于字节码的解析过程也可能因为触发元方法等情况调用 luaD_call 而从中间中断。 故需要先调用 luaV_finishOp
+      // ，再交到 luaV_execute 来完成未尽的字节码
       luaV_finishOp(L);  /* finish interrupted instruction */
       luaV_execute(L);  /* execute down to higher C 'boundary' */
     }
@@ -1053,8 +1064,8 @@ static void resume (lua_State *L, void *ud) {
       luaD_poscall(L, ci, firstArg, n);  /* finish 'luaD_precall' */
     }
     
-// 因为之前完整的调用层次，包含在 L 的 CallInfo
-// 中，而不是存在于当前的 C 调用栈上。如果检查到 Lua 的调用栈上有未尽的工作，必须完成它
+    // 因为之前完整的调用层次，包含在 L 的 CallInfo
+    // 中，而不是存在于当前的 C 调用栈上。如果检查到 Lua 的调用栈上有未尽的工作，必须完成它
     unroll(L, NULL);  /* run continuation */
   }
 }

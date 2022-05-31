@@ -50,3 +50,36 @@
 | lua.c |  		| 解释器 | Lua stand-alone interpreter |
 | luac |      | 字节码编译器 | Lua compiler (saves bytecodes to files; also lists bytecodes) |
 
+### tt_和tt类型，1字节
+| 类型   	| 类型说明  | tt_数值 | tt数值 | 代码                         |
+| -------- 	| --------  | -------- 	| ---------------------------------------------- 			 | ---------------------------------------------- 			 |
+| LUA_TNONE | 无类型 | -1 | -1 |      |
+| LUA_TNIL             | 空类型 | 0 | 0 |      |
+| LUA_TBOOLEAN         | 布尔类型 | 1 | 1 |      |
+| LUA_TLIGHTUSERDATA   | 指针类型(void *) | 2 | 2 |      |
+| LUA_TNUMBER          | 数字 | 3 | 3 |      |
+| LUA_TNUMFLT   | float | 3 | 3 | (LUA_TNUMBER \| (0 << 4)) |
+| LUA_TNUMINT | integer | 19 | 19 | (LUA_TNUMBER \| (1 << 4)) |
+| LUA_TSTRING          | 字符串类型 | 68 | 4 |      |
+| LUA_TSHRSTR          | 短字符串 | 68 | 4 | (LUA_TSTRING \| (0 << 4)) |
+| LUA_TLNGSTR          | 长字符串 | 84 | 20 | (LUA_TSTRING \| (1 << 4)) |
+| LUA_TTABLE         | 表类型           | 69  | 5    |                             |
+| LUA_TFUNCTION      | 函数类型 | 70 | 6 |      |
+| LUA_TLCL           | Lua closure      | 70  | 6    | (LUA_TFUNCTION \| (0 << 4)) |
+| LUA_TLCF           | light C function | 84 | 22   | (LUA_TFUNCTION \| (1 << 4)) |
+| LUA_TCCL           | C closure        | 102 | 38   | (LUA_TFUNCTION \| (2 << 4)) |
+| LUA_TUSERDATA      | 指针类型(void *) | 71  | 7    |                             |
+| LUA_TTHREAD        | Lua虚拟机、协程  | 72  | 8    |                             |
+
+
+
+### marked类型，1字节
+| 类型   	| 位移  | 数值 | 代码                         |
+| -------- 	| --------  | -------- 	| ---------------------------------------------- 			|
+| WHITE0BIT | 0 | 1 | 由于mark是分步原因，需要分出while和otherwhile |
+| WHITE1BIT    | 1 | 2 | 由于mark是分步原因，需要分出while和otherwhile |
+| WHITEBITS | - | 3 |      |
+| BLACKBIT | 2 | 4 |      |
+| FINALIZEDBIT | 3 | 8 |      |
+| gray | 低三位不为0 | 低三位不为0 | neither white nor black |
+|              |             |             |                                               |

@@ -42,7 +42,7 @@ LClosure *luaF_newLclosure (lua_State *L, int n) {
 /*
 ** fill a closure with new closed upvalues
 */
-/* 申请用于存放闭包中将使用到的自由变量所需要的内存 */
+//在编译过程，申请用于存放闭包中将使用到的自由变量所需要的内存 
 void luaF_initupvals (lua_State *L, LClosure *cl) {
   int i;
   for (i = 0; i < cl->nupvalues; i++) {
@@ -60,6 +60,8 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   UpVal **pp = &L->openupval;
   UpVal *p;
   UpVal *uv;
+
+  //TODO 没搞懂
   lua_assert(isintwups(L) || L->openupval == NULL);
   while (*pp != NULL && (p = *pp)->v >= level) {
     lua_assert(upisopen(p));
@@ -67,6 +69,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
       return p;  /* return it */
     pp = &p->u.open.next;
   }
+  
   /* not found: create a new upvalue */
   uv = luaM_new(L, UpVal);
   uv->refcount = 0;
@@ -74,6 +77,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   uv->u.open.touched = 1;
   *pp = uv;//插入到列表头
   uv->v = level;  /* current value lives in the stack */
+  //TODO 没搞懂
   if (!isintwups(L)) {  /* thread not in list of threads with upvalues? */
     L->twups = G(L)->twups;  /* link it to the list */
     G(L)->twups = L;
@@ -88,6 +92,9 @@ void luaF_close (lua_State *L, StkId level) {
   while (L->openupval != NULL && (uv = L->openupval)->v >= level) {
     lua_assert(upisopen(uv));
     L->openupval = uv->u.open.next;  /* remove from 'open' list */
+
+    //引用数不变
+    
     if (uv->refcount == 0)  /* no references? */
       luaM_free(L, uv);  /* free upvalue */
     else {

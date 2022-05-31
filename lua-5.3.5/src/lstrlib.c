@@ -64,6 +64,7 @@ static int str_len (lua_State *L) {
 
 
 /* translate a relative string position: negative means back from end */
+//lua的下标从1开始，也支持负数。类似于数据栈stack，-1 = len
 static lua_Integer posrelat (lua_Integer pos, size_t len) {
   if (pos >= 0) return pos;
   else if (0u - (size_t)pos > len) return 0;
@@ -76,6 +77,8 @@ static int str_sub (lua_State *L) {
   const char *s = luaL_checklstring(L, 1, &l);
   lua_Integer start = posrelat(luaL_checkinteger(L, 2), l);
   lua_Integer end = posrelat(luaL_optinteger(L, 3, -1), l);
+
+  //下标修正，从1开始
   if (start < 1) start = 1;
   if (end > (lua_Integer)l) end = l;
   if (start <= end)
