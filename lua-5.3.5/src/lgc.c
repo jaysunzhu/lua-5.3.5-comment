@@ -1156,6 +1156,8 @@ void luaC_step (lua_State *L) {
     luaE_setdebt(g, -GCSTEPSIZE * 10);  /* avoid being called too often */
     return;
   }
+  //gcstate等于GCSpause的话，说明本轮gc已经彻底完结，即将进入下一个gc轮回中
+  //每次触发luaC_step函数，只会处理至多debt+GCSTEPSIZE个字节的数据
   do {  /* repeat until pause or enough "credit" (negative debt) */
     lu_mem work = singlestep(L);  /* perform one single step */
     debt -= work;

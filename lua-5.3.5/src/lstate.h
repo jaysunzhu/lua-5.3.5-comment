@@ -200,9 +200,16 @@ typedef struct global_State {
   /* frealloc指定lua中用于申请内存的函数 */
   lua_Alloc frealloc;  /* function to reallocate memory */
   void *ud;         /* auxiliary data to 'frealloc' */
+  //真实的大小是totalbytes+GCdebt
   l_mem totalbytes;  /* number of bytes currently allocated - GCdebt */
+  //可以为负数的变量，主要用于控制gc触发的时机。当GCdebt>0时，才能触发gc流程。  
   l_mem GCdebt;  /* bytes allocated not yet compensated by the collector */
+  //每次进行gc操作时，所遍历的对象字节大小之和，单位是byte，当其值大于单步执行的内存上限时，gc终止
   lu_mem GCmemtrav;  /* memory traversed by the GC */
+  //在sweep阶段结束时，会被重新计算，本质是totalbytes+GCdebt，它的作用是，在本轮gc结束时，
+  //将自身扩充两倍大小，然后让真实大小减去扩充后的自己得到差debt，
+  //然后totalbytes会等于扩充后的自己，而GCdebt则会被负数debt赋值，
+  //就是是说下一次执行gc流程，要在有|debt|个bytes内存被开辟后，才会开始。目的是避免gc太过频繁。
   lu_mem GCestimate;  /* an estimate of the non-garbage memory in use */
 
   /* 
@@ -225,12 +232,15 @@ typedef struct global_State {
   lu_byte gckind;  /* kind of GC running */
   /* 开启GC的标志位 */
   lu_byte gcrunning;  /* true if GC is running */
-  /* allgc用来链接所有需要进行内存回收（GC）的对象。 */
+  // 单向链表，所有新建的gc对象，直接放在链表的头部。 
   GCObject *allgc;  /* list of all collectable objects */
+  //记录当前sweep的进度
   GCObject **sweepgc;  /* current position of sweep in list */
   //finalizers是含有元表的table和userdata的列表
   GCObject *finobj;  /* list of collectable objects with finalizers */
+  //首次从白色被标记为灰色的时候，会被放入这个列表，放入这个列表的gc对象，是准备被propagate的对象
   GCObject *gray;  /* list of gray objects */
+  //grayagain的作用:table对象，从黑色变回灰色时，会放入grayagain中，作用是避免table反复在黑色和灰色之间来回切换重复扫描
   GCObject *grayagain;  /* list of objects to be traversed atomically */
   GCObject *weak;  /* list of tables with weak values */
   GCObject *ephemeron;  /* list of ephemeron tables (weak keys) */
@@ -243,6 +253,7 @@ typedef struct global_State {
   struct lua_State *twups;  /* list of threads with open upvalues */
   unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
   int gcpause;  /* size of pause between successive GCs */
+  //一个和GC单次处理多少字节相关的参数
   int gcstepmul;  /* GC 'granularity' */
   
   // 当调用LUA_THROW接口时，如果当前不处于保护模式，那么会直接调用panic函数
@@ -401,12 +412,7 @@ struct lua_State {
 */
 /*
 ** 用于存放所有需要GC的数据类型的联合体，这个联合体主要用于做类型转换使用。
-** lua是怎么利用下面这个联合体实现将GCObject转换为具体的某一种需要GC的类型的呢？
-** 我们知道，所有需要进行GC的类型在其对应的结构体开始都会包含一个CommonHeader。
-** union GCUnion中列出了所有类型都是需要进行GC的，都包含CommonHeader。实际上GCObject
-** 这个类型其实就只包含了CommonHeader，因此对于一个类型为union GCUnion的值，该值的
-** 内存中最开始都包含了CommonHeader，而不管该值是union GCUnion中哪一种具体的类型。
-** 因此可以利用这一特性来做类型转换。
+** union GCUnion中列出了所有类型都是需要进行GC的，都包含CommonHeader。
 */
 union GCUnion {
   GCObject gc;  /* common header */
