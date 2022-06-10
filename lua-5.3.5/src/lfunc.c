@@ -60,8 +60,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   UpVal **pp = &L->openupval;
   UpVal *p;
   UpVal *uv;
-
-  //TODO 没搞懂
+  
   lua_assert(isintwups(L) || L->openupval == NULL);
   while (*pp != NULL && (p = *pp)->v >= level) {
     lua_assert(upisopen(p));
@@ -74,11 +73,11 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
   uv = luaM_new(L, UpVal);
   uv->refcount = 0;
   uv->u.open.next = *pp;  /* link it to list of open upvalues */
-  uv->u.open.touched = 1;
+  uv->u.open.touched = 1; /* can be marked in 'remarkupvals' */
   *pp = uv;//插入到列表头
   uv->v = level;  /* current value lives in the stack */
-  //TODO 没搞懂
   if (!isintwups(L)) {  /* thread not in list of threads with upvalues? */
+    //thread首次有open upvalue，需要加入到g->twups的链表头
     L->twups = G(L)->twups;  /* link it to the list */
     G(L)->twups = L;
   }
@@ -86,7 +85,7 @@ UpVal *luaF_findupval (lua_State *L, StkId level) {
 }
 
 //upval 从open移到close，没引用则直接释放
-//level 为数据栈地址（数据栈内存在操作系统的堆上，故向高地址发展）
+//level 为数据栈起始地址（数据栈内存在操作系统的堆上，故向高地址发展）
 void luaF_close (lua_State *L, StkId level) {
   UpVal *uv;
   while (L->openupval != NULL && (uv = L->openupval)->v >= level) {
@@ -94,7 +93,6 @@ void luaF_close (lua_State *L, StkId level) {
     L->openupval = uv->u.open.next;  /* remove from 'open' list */
 
     //引用数不变
-    
     if (uv->refcount == 0)  /* no references? */
       luaM_free(L, uv);  /* free upvalue */
     else {

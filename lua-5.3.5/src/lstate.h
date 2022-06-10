@@ -206,10 +206,11 @@ typedef struct global_State {
   l_mem GCdebt;  /* bytes allocated not yet compensated by the collector */
   //每次进行gc操作时，所遍历的对象字节大小之和，单位是byte，当其值大于单步执行的内存上限时，gc终止
   lu_mem GCmemtrav;  /* memory traversed by the GC */
-  //在sweep阶段结束时，会被重新计算，本质是totalbytes+GCdebt，它的作用是，在本轮gc结束时，
-  //将自身扩充两倍大小，然后让真实大小减去扩充后的自己得到差debt，
+  
+  //对开辟的真实大小（gettotalbytes = totalbytes+GCdebt），在sweep阶段进行重新统计。它的作用是，在本轮gc结束时，
+  //将自身扩充两倍大小(参考setpause)，然后让真实大小减去扩充后的自己得到差debt，
   //然后totalbytes会等于扩充后的自己，而GCdebt则会被负数debt赋值，
-  //就是是说下一次执行gc流程，要在有|debt|个bytes内存被开辟后，才会开始。目的是避免gc太过频繁。
+  //目的是避免gc太过频繁。
   lu_mem GCestimate;  /* an estimate of the non-garbage memory in use */
 
   /* 
@@ -218,10 +219,7 @@ typedef struct global_State {
   */
   stringtable strt;  /* hash table for strings */
   
-  /* 
-  ** 保存全局的注册表，注册表就是一个全局的table（即整个虚拟机中只有一个注册表），
-  ** 它只能被C代码访问，通常，它用来保存那些需要在几个模块中共享的数据(类似于全局数据)
-  */
+  //其中l_registry下标为2（LUA_RIDX_GLOBALS）是全局表,下标为1（LUA_RIDX_MAINTHREAD）是mainthread
   TValue l_registry;
 
   /* lua中进行hash操作时的随机种子，例如给字符串对象进行hash时，会使用该成员的值。 */
@@ -232,28 +230,44 @@ typedef struct global_State {
   lu_byte gckind;  /* kind of GC running */
   /* 开启GC的标志位 */
   lu_byte gcrunning;  /* true if GC is running */
-  // 单向链表，所有新建的gc对象，直接放在链表的头部。 
+  // 单向链表，所有新建的gc对象，直接放在链表的头部。 参考luaC_newobj
   GCObject *allgc;  /* list of all collectable objects */
-  //记录当前sweep的进度
+  
+  //记录当前sweep的进度，有可能是allgc，也有可能是finobj、tobefnz
   GCObject **sweepgc;  /* current position of sweep in list */
-  //finalizers是含有元表的table和userdata的列表
+  
+  //finalizers是含有GC元方法的的table和userdata的列表
   GCObject *finobj;  /* list of collectable objects with finalizers */
   //首次从白色被标记为灰色的时候，会被放入这个列表，放入这个列表的gc对象，是准备被propagate的对象
+
+  //gray、grayagain
+  //GCSpropagate阶段，需要对gray链表处理
   GCObject *gray;  /* list of gray objects */
-  //grayagain的作用:table对象，从黑色变回灰色时，会放入grayagain中，作用是避免table反复在黑色和灰色之间来回切换重复扫描
+  //grayagain，retraverse it in atomic phase。
+  //比如table对象barrierback，从黑色变回灰色时，会放入grayagain中，作用是避免table反复在黑色和灰色之间来回切换重复扫描
+  //比如弱表需要在atomic phase再次处理，LUA_TTHREAD类型直接延迟到atomic phase处理
   GCObject *grayagain;  /* list of objects to be traversed atomically */
+
+  //weak、ephemeron、allweak
   GCObject *weak;  /* list of tables with weak values */
   GCObject *ephemeron;  /* list of ephemeron tables (weak keys) */
   GCObject *allweak;  /* list of all-weak tables */
+  
+  //to be finalized，即将GC的userdata（含GC元方法）的列表
+  //插入到列表尾
   GCObject *tobefnz;  /* list of userdata to be GC */
   
   /* 用于保存不被GC回收的对象，如lua中关键字对应的TString对象，元方法对应的TString对象等等 */
   GCObject *fixedgc;  /* list of objects not to be collected */
-  
+
+  //单向链表，插入链表头。通过lua_State.twups作为next
   struct lua_State *twups;  /* list of threads with open upvalues */
+  //默认是1，以2的倍数变大
   unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
+  
+  //一次完整GC后，下次进入GC step的增长倍数。默认200%，可以通过collectgarbage("setpause")设置
   int gcpause;  /* size of pause between successive GCs */
-  //一个和GC单次处理多少字节相关的参数
+  //一个和GC单次处理多少字节相关的参数,可以通过collectgarbage("setstepmul")设置
   int gcstepmul;  /* GC 'granularity' */
   
   // 当调用LUA_THROW接口时，如果当前不处于保护模式，那么会直接调用panic函数
@@ -266,11 +280,14 @@ typedef struct global_State {
   const lua_Number *version;  /* pointer to version number */
   TString *memerrmsg;  /* memory-error message */
 
-  /* 存放lua中支持的event对应的名字(字符串) */
+  //元表的字符串映射
   TString *tmname[TM_N];  /* array with tag-method names */
 
   /* 基本类型的元表。除了userdata和table之外，其余类型的每种类型的所有对象共享同一个元表。 */
   struct Table *mt[LUA_NUMTAGS];  /* metatables for basic types */
+
+  //对已经保存在c层且需要频繁转换为TString的c层字符串非常有效率上的帮助。strcache内的字符串缓存保存一个gc周期，gc进入sweep阶段前清空
+  //STRCACHE_N个桶，每个桶有STRCACHE_M
   TString *strcache[STRCACHE_N][STRCACHE_M];  /* cache for strings in API */
 } global_State;
 
@@ -347,7 +364,9 @@ struct lua_State {
   /* 栈的起始地址 */
   StkId stack;  /* stack base */
   //插入数据来源数据栈stack，而且还是比较新（即slot就高）。由于插入到头部缘故，所以openupval的头是对于stack的高地址部分
+  //openupval是有序的，头的数据靠近stack的top，尾部靠近stack的七尺
   UpVal *openupval;  /* list of open upvalues in this stack */
+  //参考linkgclist
   GCObject *gclist;
 
   //初始状态就是当前L，表示为 thread has no upvalues 

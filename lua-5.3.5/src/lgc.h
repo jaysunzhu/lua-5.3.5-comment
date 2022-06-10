@@ -38,15 +38,20 @@
 ** Possible states of the Garbage Collector
 */
 #define GCSpropagate	0	//扫描，mark阶段，属于Incremental Mark
-#define GCSatomic	1		//原子的
+#define GCSatomic	1		//原子的mark阶段
 #define GCSswpallgc	2		//sweep "regular" objects
+//参考g->finobj
 #define GCSswpfinobj	3	//sweep objects with finalizers
+//参考g->tobefnz
 #define GCSswptobefnz	4	//sweep objects to be finalized
 #define GCSswpend	5		//finish sweeps
+//sweep阶段也会进行runafewfinalizers
+//GCScallfin是将剩余部分进行清理
 #define GCScallfin	6		//call remaining finalizers 
 #define GCSpause	7		//
 
 
+//sweep阶段，包含GCSswpallgc、GCSswpfinobj、GCSswptobefnz、GCSswpend
 #define issweepphase(g)  \
 	(GCSswpallgc <= (g)->gcstate && (g)->gcstate <= GCSswpend)
 
@@ -71,6 +76,7 @@
 #define setbits(x,m)		((x) |= (m))
 //判断多个位
 #define testbits(x,m)		((x) & (m))
+//位左移
 #define bitmask(b)		(1<<(b))
 #define bit2mask(b1,b2)		(bitmask(b1) | bitmask(b2))
 //设置单个位
@@ -111,6 +117,7 @@
 
 //while0到while1或者while1到while0。使用异或。(x)->marked = (x)->marked ^ WHITEBITS
 #define changewhite(x)	((x)->marked ^= WHITEBITS)
+//去掉白色，即进入灰色。见propagatemark
 #define gray2black(x)	l_setbit((x)->marked, BLACKBIT)
 
 //返回currentwhite，0或者1
@@ -123,10 +130,12 @@
 ** 'condchangemem' is used only for heavy tests (forcing a full
 ** GC cycle on every opportunity)
 */
+//只有当GCdebt的值大于0的时候，才能触发gc运作机制
 #define luaC_condGC(L,pre,pos) \
 	{ if (G(L)->GCdebt > 0) { pre; luaC_step(L); pos;}; \
 	  condchangemem(L,pre,pos); }
 
+//一个对象被创建以后，在合适的时机去进行gc检查和处理
 /* more often than not, 'pre'/'pos' are empty */
 #define luaC_checkGC(L)		luaC_condGC(L,(void)0,(void)0)
 
@@ -144,23 +153,22 @@
 //这个table很可能在黑色和灰色之间来回切换，进行很多重复的扫描，为了提高效率，则将他放在grayagain列表中，在atomic阶段，一次性标记和扫描完。
 //
 
-//barrier分为两种，一种是向前设置barrier，也就是直接将新创建的对象设置为灰色，并放入gray列表
+//参考luaC_barrier_，v表示TValue
 #define luaC_barrier(L,p,v) (  \
 	(iscollectable(v) && isblack(p) && iswhite(gcvalue(v))) ?  \
 	luaC_barrier_(L,obj2gco(p),gcvalue(v)) : cast_void(0))
 
-//还有一种则是向后设置barrier，这种是将黑色对象设置为灰色，然后放入grayagain列表
+//参考luaC_barrierback_
 #define luaC_barrierback(L,p,v) (  \
 	(iscollectable(v) && isblack(p) && iswhite(gcvalue(v))) ? \
 	luaC_barrierback_(L,p) : cast_void(0))
 
-
-
-
+//参考luaC_barrier_，o表示gcobject
 #define luaC_objbarrier(L,p,o) (  \
 	(isblack(p) && iswhite(o)) ? \
 	luaC_barrier_(L,obj2gco(p),obj2gco(o)) : cast_void(0))
 
+//参考luaC_upvalbarrier_
 #define luaC_upvalbarrier(L,uv) ( \
 	(iscollectable((uv)->v) && !upisopen(uv)) ? \
          luaC_upvalbarrier_(L,uv) : cast_void(0))

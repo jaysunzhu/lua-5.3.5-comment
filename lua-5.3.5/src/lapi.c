@@ -791,7 +791,7 @@ LUA_API int lua_getfield (lua_State *L, int idx, const char *k) {
   return auxgetstr(L, index2addr(L, idx), k);
 }
 
-
+//idx是table 在stack的slot idx，n是arrayindex编号（1开始算）
 LUA_API int lua_geti (lua_State *L, int idx, lua_Integer n) {
   StkId t;
   const TValue *slot;
@@ -960,12 +960,7 @@ LUA_API void lua_setglobal (lua_State *L, const char *name) {
   /* 获取全局唯一的注册表，注册表就是一个table */
   Table *reg = hvalue(&G(L)->l_registry);
   lua_lock(L);  /* unlock done in 'auxsetstr' */
-  /*
-  ** luaH_getint(reg, LUA_RIDX_GLOBALS)用于从全局注册表中取出下标为LUA_RIDX_GLOBALS
-  ** 的value对象，这个value对象其实是一个表_G，它掌控了整个全局环境，保存了lua语言中
-  ** 几乎所有的全局函数和变量。_G在初始情况是只包含lua程序库的函数和变量，lua程序中
-  ** 定义的全局函数和变量会自动加入到_G中，而局部函数和变量不会这样做。
-  */
+
   auxsetstr(L, luaH_getint(reg, LUA_RIDX_GLOBALS), name);
 }
 
@@ -1303,6 +1298,7 @@ LUA_API int lua_load (lua_State *L, lua_Reader reader, void *data,
       Table *reg = hvalue(&G(L)->l_registry);
       const TValue *gt = luaH_getint(reg, LUA_RIDX_GLOBALS);
       /* set global table as 1st upvalue of 'f' (may be LUA_ENV) */
+      //upvalue第一个位置总是LUA_ENV（global table）
       setobj(L, f->upvals[0]->v, gt);
       luaC_upvalbarrier(L, f->upvals[0]);
     }
@@ -1592,10 +1588,14 @@ LUA_API void lua_upvaluejoin (lua_State *L, int fidx1, int n1,
   LClosure *f1;
   UpVal **up1 = getupvalref(L, fidx1, n1, &f1);
   UpVal **up2 = getupvalref(L, fidx2, n2, NULL);
+  //up1 refcount--
   luaC_upvdeccount(L, *up1);
   *up1 = *up2;
+  //up2 refcount++ 
   (*up1)->refcount++;
-  if (upisopen(*up1)) (*up1)->u.open.touched = 1;
+  //up1 为open时候
+  if (upisopen(*up1)) (*up1)->u.open.touched = 1;/* can be marked in 'remarkupvals' */
+  //up1 为close时候
   luaC_upvalbarrier(L, *up1);
 }
 

@@ -244,8 +244,13 @@ static int luaB_pairs (lua_State *L) {
 ** Traversal function for 'ipairs'
 */
 static int ipairsaux (lua_State *L) {
+  //index1的参数是Table，index2的参数是临时变量for循环的下标
+  //Lua下标从1开始
   lua_Integer i = luaL_checkinteger(L, 2) + 1;
   lua_pushinteger(L, i);
+  //stack low2high： table，0开始的下标，1开始的下标
+
+  //找到key，返回2个参数，key和value
   return (lua_geti(L, 1, i) == LUA_TNIL) ? 1 : 2;
 }
 

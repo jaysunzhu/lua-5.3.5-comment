@@ -675,10 +675,12 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
   setclLvalue(L, ra, ncl);  /* anchor new closure in stack */
   
   for (i = 0; i < nup; i++) {  /* fill in its upvalues */
+    
     if (uv[i].instack)  /* upvalue refers to local variable? */
       ncl->upvals[i] = luaF_findupval(L, base + uv[i].idx);
     else  /* get upvalue from enclosing function */
       ncl->upvals[i] = encup[uv[i].idx];
+    
     ncl->upvals[i]->refcount++;
     /* new closure is white, so we do not need a barrier here */
   }

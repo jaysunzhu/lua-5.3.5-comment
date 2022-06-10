@@ -323,8 +323,6 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
 
 //对已经保存在c层且需要频繁转换为TString的c层字符串非常有效率上的帮助。strcache内的字符串缓存保存一个gc周期，gc进入sweep阶段前清空
 TString *luaS_new (lua_State *L, const char *str) {
-
-  /* 计算参数指定的字符串str对应的hash值，即在global_State的strcache的索引值 */
   unsigned int i = point2uint(str) % STRCACHE_N;  /* hash */
   int j;
   TString **p = G(L)->strcache[i];

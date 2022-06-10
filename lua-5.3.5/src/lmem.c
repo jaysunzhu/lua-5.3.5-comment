@@ -77,6 +77,7 @@ l_noret luaM_toobig (lua_State *L) {
 /* 通用的内存申请函数 */
 //osize为0，且nsize > 0时，说明这是一个创建新内存块，那么GCdebt就要加上这个新创建对象的内存大小。
 //如果osize>0且nsize为0时，说明程序要释放一个对象，那么GCdebt要减去这个内存的大小
+//osize>0且nsize>0时，调整大小
 void *luaM_realloc_ (lua_State *L, void *block, size_t osize, size_t nsize) {
   void *newblock;
   global_State *g = G(L);
@@ -97,6 +98,8 @@ void *luaM_realloc_ (lua_State *L, void *block, size_t osize, size_t nsize) {
       luaD_throw(L, LUA_ERRMEM);
   }
   lua_assert((nsize == 0) == (newblock == NULL));
+
+  //更新g->GCdebt
   g->GCdebt = (g->GCdebt + nsize) - realosize;
   return newblock;
 }

@@ -49,16 +49,22 @@ struct UpVal {
   
   //closed，v指向value。opend，v指向stack上slot
   TValue *v;  /* points to stack or to its own value */
-    //0 no references
-  lu_mem refcount;  /* reference counter */ //引用基数，为了做GC
+
+  //引用计数，为了做GC，无论Upvaldesc.instack是open还是close。0 no references
+  //被闭包引用和lua_upvaluejoin会+1  
+  lu_mem refcount;  /* reference counter */ 
   union {
     struct {  /* (when open) */
       UpVal *next;  /* linked list */
-      //只有0-1，默认为1
+      //是否延迟mark标志。1为需要延迟标志，参考remarkupvals
       int touched;  /* mark to avoid cycles with dead threads */
     } open;
     TValue value;  /* the value (when closed) */
   } u;
+
+    //说明：
+    //引用计数，为了控制本Upvalue是否需要GC
+    //touched，是open的upvalue，是否需要mark其引用的资源
 };
 
 #define upisopen(up)	((up)->v != &(up)->u.value)

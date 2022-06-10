@@ -791,6 +791,7 @@ int main (int argc, char **argv) {
     l_message(argv[0], "cannot create state: not enough memory");
     return EXIT_FAILURE;
   }
+
   /*
   ** 以保护模式来调用pmain()函数。步骤如下：
   ** 1、将pmain压入虚拟栈。

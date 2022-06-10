@@ -225,6 +225,7 @@ static unsigned int findindex (lua_State *L, Table *t, StkId key) {
       ** 如果以上条件均满足，那么进一步比较key的内容和Node节点中key的内容是否相等，
       ** 如果相等，那么也当作是找到了对应的节点，也会计算出下标，并返回。
       */
+      
       //死键在 rehash 后会从哈希表中清除，而不添加新键就不会 rehash 表而导致死键消失。在这个前提下，遍历 table 是安全的
       if (luaV_rawequalobj(gkey(n), key) ||
             (ttisdeadkey(gkey(n)) && iscollectable(key) &&
