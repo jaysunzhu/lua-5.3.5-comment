@@ -66,7 +66,7 @@
 | LUA_TTABLE         | 表类型           | 69  | 5    |                             |
 | LUA_TFUNCTION      | 函数类型 | 70 | 6 |      |
 | LUA_TLCL           | Lua closure      | 70  | 6    | (LUA_TFUNCTION \| (0 << 4)) |
-| LUA_TLCF           | light C function | 84 | 22   | (LUA_TFUNCTION \| (1 << 4)) |
+| LUA_TLCF           | light C function | **22** | 22   | (LUA_TFUNCTION \| (1 << 4)) |
 | LUA_TCCL           | C closure        | 102 | 38   | (LUA_TFUNCTION \| (2 << 4)) |
 | LUA_TUSERDATA      | 指针类型(void *) | 71  | 7    |                             |
 | LUA_TTHREAD        | Lua虚拟机、协程  | 72  | 8    |                             |
