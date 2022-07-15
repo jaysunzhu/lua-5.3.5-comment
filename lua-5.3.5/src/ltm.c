@@ -107,11 +107,12 @@ const char *luaT_objtypename (lua_State *L, const TValue *o) {
   return ttypename(ttnov(o));  /* else use standard type name */
 }
 
-//以__index为例子：f为tm，p1为t，p2为key，p3为value
-//以__add为例子：f为tm，p1为+号前参数，p2为+号后参数，p3为value
+//以__index为例子：f为tm function，p1为t，p2为key，p3为value
+//以__add为例子：f为tm function，p1为+号前参数，p2为+号后参数，p3为value
 //hasres参数表示是否需要输出,1为输出
 void luaT_callTM (lua_State *L, const TValue *f, const TValue *p1,
                   const TValue *p2, TValue *p3, int hasres) {
+  //记录P3的位置
   ptrdiff_t result = savestack(L, p3);
   StkId func = L->top;
   setobj2s(L, func, f);  /* push function (assume EXTRA_STACK) */
@@ -128,6 +129,7 @@ void luaT_callTM (lua_State *L, const TValue *f, const TValue *p1,
   else
     luaD_callnoyield(L, func, hasres);
   if (hasres) {  /* if has result, move it to its place */
+    //还原P3的内容
     p3 = restorestack(L, result);
     setobjs2s(L, p3, --L->top);
   }

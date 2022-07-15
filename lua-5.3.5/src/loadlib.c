@@ -590,7 +590,7 @@ static void findloader (lua_State *L, const char *name) {
       luaL_error(L, "module '%s' not found:%s", name, lua_tostring(L, -1));
     }
 	
-    /* 将库名字压入堆栈，作为寻找库加载函数的搜索函数的参数 */
+    // index 5 为 name
     lua_pushstring(L, name);
 
 	/*
@@ -824,8 +824,8 @@ static void createsearcherstable (lua_State *L) {
   lua_createtable(L, sizeof(searchers)/sizeof(searchers[0]) - 1, 0);
   /* fill it with predefined searchers */
   /*
-  ** 将预定义的搜索函数存入到table中，注意，搜索函数会有一个内容为'package'的自由变量，因此
-  ** 要将预定义的搜索函数以CClosure的方式添加到table中。除了函数自身之外，函数的自由变量也会
+  ** 将预定义的搜索函数存入到table中，注意，搜索函数会有一个内容为'package'的upvalue，因此
+  ** 要将预定义的搜索函数以CClosure的方式添加到table中。除了函数自身之外，函数的upvalue也会
   ** 存放到CClosure中。
   */
   for (i=0; searchers[i] != NULL; i++) {
@@ -963,8 +963,8 @@ LUAMOD_API int luaopen_package (lua_State *L) {
 
   /* 
   ** 将全局变量ll_funcs中的函数注册到_G table中，键值是函数的名字，内容就是ll_funcs中定义的函数对应的
-  ** CClosure对象。因为要将package库对应的库级别的table作为ll_funcs中定义的函数的自由变量，因此
-  ** 要用CClosure对象。luaL_setfuncs()在结束的时候会将重复压入栈顶的package对应的table（作为自由变量）
+  ** CClosure对象。因为要将package库对应的库级别的table作为ll_funcs中定义的函数的upvalue，因此
+  ** 要用CClosure对象。luaL_setfuncs()在结束的时候会将重复压入栈顶的package对应的table（作为upvalue）
   ** 弹出堆栈。
   */
   luaL_setfuncs(L, ll_funcs, 1);  /* open lib into global table */

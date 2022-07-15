@@ -759,7 +759,6 @@ const TValue *luaH_getint (Table *t, lua_Integer key) {
 /*
 ** search function for short strings
 */
-/* 从lua表中获取键值为短字符串类型的value信息 */
 const TValue *luaH_getshortstr (Table *t, TString *key) {
 
   /*
@@ -816,7 +815,7 @@ static const TValue *getgeneric (Table *t, const TValue *key) {
 const TValue *luaH_getstr (Table *t, TString *key) {
   /* 短字符串和长字符串分开处理。 */
   if (key->tt == LUA_TSHRSTR)
-    /* 从lua表中获取键值为短字符串类型的value信息 */
+    //短字符串：直接对比内存地址，不需要逐字节对比
     return luaH_getshortstr(t, key);
   else {  /* for long strings, use generic case */
     /*

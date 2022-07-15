@@ -75,10 +75,11 @@ static lua_Integer posrelat (lua_Integer pos, size_t len) {
 static int str_sub (lua_State *L) {
   size_t l;
   const char *s = luaL_checklstring(L, 1, &l);
+  //传0和传1的效果一样
   lua_Integer start = posrelat(luaL_checkinteger(L, 2), l);
   lua_Integer end = posrelat(luaL_optinteger(L, 3, -1), l);
 
-  //下标修正，从1开始
+  //下标修正，从1开始。
   if (start < 1) start = 1;
   if (end > (lua_Integer)l) end = l;
   if (start <= end)
@@ -218,13 +219,16 @@ static int str_dump (lua_State *L) {
 #define CAP_UNFINISHED	(-1)
 #define CAP_POSITION	(-2)
 
-
+//sizeof(MatchState) 280Byte
 typedef struct MatchState {
   const char *src_init;  /* init of source string */
   const char *src_end;  /* end ('\0') of source string */
   const char *p_end;  /* end ('\0') of pattern */
   lua_State *L;
+  //默认200，同时需要>0
   int matchdepth;  /* control for recursive depth (to avoid C stack overflow) */
+
+  //()的分组功能使用的数据结构
   unsigned char level;  /* total number of captures (finished or unfinished) */
   struct {
     const char *init;
@@ -243,7 +247,10 @@ static const char *match (MatchState *ms, const char *s, const char *p);
 #endif
 
 
+//分隔符
 #define L_ESC		'%'
+
+//pattern的 正则特殊字符 ^$()%.[]*+-? 10个字符
 #define SPECIALS	"^$*+?.([%-"
 
 
@@ -429,7 +436,7 @@ static const char *match_capture (MatchState *ms, const char *s, int l) {
   else return NULL;
 }
 
-
+//正则表达式 实现
 static const char *match (MatchState *ms, const char *s, const char *p) {
   if (ms->matchdepth-- == 0)
     luaL_error(ms->L, "pattern too complex");
@@ -576,6 +583,7 @@ static void push_onecapture (MatchState *ms, int i, const char *s,
 
 static int push_captures (MatchState *ms, const char *s, const char *e) {
   int i;
+  //find和match函数返回有差异，match没有分组，会返回匹配整值
   int nlevels = (ms->level == 0 && s) ? 1 : ms->level;
   luaL_checkstack(ms->L, nlevels, "too many captures");
   for (i = 0; i < nlevels; i++)
@@ -623,8 +631,10 @@ static int str_find_aux (lua_State *L, int find) {
     return 1;
   }
   /* explicit request or no special characters? */
+  //pattern参数没有特殊字符或者plain强制为true
   if (find && (lua_toboolean(L, 4) || nospecials(p, lp))) {
     /* do a plain search */
+    //字符串匹配
     const char *s2 = lmemfind(s + init - 1, ls - (size_t)init + 1, p, lp);
     if (s2) {
       lua_pushinteger(L, (s2 - s) + 1);
@@ -671,6 +681,7 @@ static int str_match (lua_State *L) {
 
 /* state for 'gmatch' */
 typedef struct GMatchState {
+  //缓存数据 src匹配后的起始地址
   const char *src;  /* current position */
   const char *p;  /* pattern */
   const char *lastmatch;  /* end of last match */
@@ -682,6 +693,7 @@ static int gmatch_aux (lua_State *L) {
   GMatchState *gm = (GMatchState *)lua_touserdata(L, lua_upvalueindex(3));
   const char *src;
   gm->ms.L = L;
+  //src++ 这里匹配效率太低了
   for (src = gm->src; src <= gm->ms.src_end; src++) {
     const char *e;
     reprepstate(&gm->ms);

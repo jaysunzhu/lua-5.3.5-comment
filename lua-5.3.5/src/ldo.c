@@ -1284,7 +1284,7 @@ static void f_parser (lua_State *L, void *ud) {
   }
   lua_assert(cl->nupvalues == cl->p->sizeupvalues);
 
-  /* 申请用于存放闭包中将使用到的自由变量所需要的内存 */
+  /* 申请用于存放闭包中将使用到的upvalue所需要的内存 */
   luaF_initupvals(L, cl);
 }
 

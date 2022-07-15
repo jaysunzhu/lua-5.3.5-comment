@@ -155,7 +155,7 @@ static int forlimit (const TValue *obj, lua_Integer *p, lua_Integer step,
 /*
 ** Finish the table access 'val = t[key]'.
 ** if 'slot' is NULL, 't' is not a table; otherwise, 'slot' points to
-** t[k] entry (which must be nil).
+** t[key] entry (which must be nil).
 */
 void luaV_finishget (lua_State *L, const TValue *t, TValue *key, StkId val,
                       const TValue *slot) {
@@ -167,7 +167,7 @@ void luaV_finishget (lua_State *L, const TValue *t, TValue *key, StkId val,
       lua_assert(!ttistable(t));
       tm = luaT_gettmbyobj(L, t, TM_INDEX);
       if (ttisnil(tm))
-        //中断 畬畵畡畖 luaV_execute 的执行
+        //中断 luaV_execute 的执行
         luaG_typeerror(L, t, "index");  /* no metamethod */
       /* else will try the metamethod */
     }
@@ -1370,12 +1370,16 @@ void luaV_execute (lua_State *L) {
         }
       }
       vmcase(OP_FORLOOP) {
+
         if (ttisinteger(ra)) {  /* integer loop? */
           lua_Integer step = ivalue(ra + 2);
+          //idx = ra + step
           lua_Integer idx = intop(+, ivalue(ra), step); /* increment index */
           lua_Integer limit = ivalue(ra + 1);
           if ((0 < step) ? (idx <= limit) : (limit <= idx)) {
+            //符合条件，for循环继续
             ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */
+            //对var加上step
             chgivalue(ra, idx);  /* update internal index... */
             setivalue(ra + 3, idx);  /* ...and external index */
           }
@@ -1394,6 +1398,18 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_FORPREP) {
+        //简单的数字循环
+        // for v = e1 , e2 , e3 do block end
+        // Lua 手册中这样就是这类循环的实现
+        // do
+        //   local var , limit , step = tonumber ( e1 ) , tonumber ( e2 ) , tonumber ( e3 )
+        //   if not ( var and limit and step ) then error () end
+        //   while ( step > 0 and var <= limit ) or ( step <= 0 and var >= limit )
+        //     local v = var
+        //     block
+        //     var = var + step
+        //   end
+        // end
         TValue *init = ra;
         TValue *plimit = ra + 1;
         TValue *pstep = ra + 2;
@@ -1404,6 +1420,7 @@ void luaV_execute (lua_State *L) {
           /* all values are integer */
           lua_Integer initv = (stopnow ? 0 : ivalue(init));
           setivalue(plimit, ilimit);
+          //由于 OP_FORLOOP 每次都会递增 var 值，所以 OP_FORPREP 预先把 var 减去 step
           setivalue(init, intop(-, initv, ivalue(pstep)));
         }
         else {  /* try making all values floats */
@@ -1422,6 +1439,19 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_TFORCALL) {
+        //for var_1 , ... , var_n in explist do block end
+        //等价于
+        // do
+        //   local f , s , var = explist
+        //   while true do
+        //     local var_1 , ..., var_n = f (s , var )
+        //     if var_1 == nil then break end
+        //     var = var_1
+        //     block
+        //   end
+        // end
+        //实际生成的字节码，迭代器调用在代码块的尾部。在循环体开头，用一条 UMP 指令，直接跳转到尾部
+        // local var_1, ..., var_n = f(s, var) 这个过程对应于 OP_TFORCALL 这个操作
         StkId cb = ra + 3;  /* call base */
         setobjs2s(L, cb+2, ra+2);
         setobjs2s(L, cb+1, ra+1);
@@ -1432,10 +1462,13 @@ void luaV_execute (lua_State *L) {
         i = *(ci->u.l.savedpc++);  /* go to next instruction */
         ra = RA(i);
         lua_assert(GET_OPCODE(i) == OP_TFORLOOP);
+        //当循环次数很多，且不被中断时，虚拟机只解释了 OP_TFORCALL 而没有处理 OP_TFORCALL 和 OP_TFORLOOP 两条指针
         goto l_tforloop;
       }
       vmcase(OP_TFORLOOP) {
+        //判断循环是否结束，并在未结束时移动當畡畲参数，并跳转到代码块开头继续循环的过程由OP_TFORLOOP承担
         l_tforloop:
+        //
         if (!ttisnil(ra + 1)) {  /* continue loop? */
           setobjs2s(L, ra, ra + 1);  /* save control variable */
            ci->u.l.savedpc += GETARG_sBx(i);  /* jump back */

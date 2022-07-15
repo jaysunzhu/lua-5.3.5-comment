@@ -517,7 +517,7 @@ static void *resizebox (lua_State *L, int idx, size_t newsize) {
   ** userdata对象内的缓冲区中。
   */
   UBox *box = (UBox *)lua_touserdata(L, idx);
-  /* 申请box对象内部的缓冲区 */
+  //UBox的内存relloc
   void *temp = allocf(ud, box->box, box->bsize, newsize);
   if (temp == NULL && newsize > 0) {  /* allocation error? */
     resizebox(L, idx, 0);  /* free buffer */
@@ -619,6 +619,7 @@ LUALIB_API char *luaL_prepbuffsize (luaL_Buffer *B, size_t sz) {
     if (buffonstack(B))
       newbuff = (char *)resizebox(L, -1, newsize);
     else {  /* no buffer yet */
+      //initb的长度不足，使用userdata管理UBox
       newbuff = (char *)newbox(L, newsize);
       memcpy(newbuff, B->b, B->n * sizeof(char));  /* copy original content */
     }
@@ -1136,12 +1137,12 @@ LUALIB_API void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	/* 将函数的upvalues均压入堆栈 */
     for (i = 0; i < nup; i++)  /* copy upvalues to the top */
       /*
-      ** 将待注册函数的自由变量一一再次全部压入栈中，而这些自由变量在调用luaL_setfuncs()函数的
+      ** 将待注册函数的upvalue一一再次全部压入栈中，而这些upvalue在调用luaL_setfuncs()函数的
       ** 外层函数中已经按顺序一一压入栈中了，因此这里只是将他们再一次一一全部压入栈中。为什么需要
-      ** 重复做这样的事情呢？因为下面的lua_pushcclosre()函数会将本次循环压入栈中的自由变量保存到
-      ** CClosure对象的upvalues数组中，并从栈中弹出。为了下一个待注册函数能找到所需自由变量
-      ** 每个待注册的函数要自己负责将需要的自由变量再次压入栈中，使用完后再将它们弹出。
-      ** 这样就保证栈中始终有一份自由变量列表，可以被下一个待注册函数使用。
+      ** 重复做这样的事情呢？因为下面的lua_pushcclosre()函数会将本次循环压入栈中的upvalue保存到
+      ** CClosure对象的upvalues数组中，并从栈中弹出。为了下一个待注册函数能找到所需upvalue
+      ** 每个待注册的函数要自己负责将需要的upvalue再次压入栈中，使用完后再将它们弹出。
+      ** 这样就保证栈中始终有一份upvalue列表，可以被下一个待注册函数使用。
       */
       lua_pushvalue(L, -nup);
     /*
@@ -1166,8 +1167,8 @@ LUALIB_API void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
   ** 由于上面已经将upvalue保存到了CClosure对象中，因此原先存放在堆栈中的upvalue就可以
   ** 移除了。这个地方是不是多余了？这个地方其实没有多余，因为如果nup不为0的话，
   ** 那么在调用该函数luaL_setfuncs()的外层函数中会将待注册函数的upvalue压入栈顶。现在
-  ** 这些自由变量已经成功添加到了待注册函数中了，那么在这里就可以将外层函数压入到栈中的
-  ** 自由变量全部弹出了。
+  ** 这些upvalue已经成功添加到了待注册函数中了，那么在这里就可以将外层函数压入到栈中的
+  ** upvalue全部弹出了。
   */
   lua_pop(L, nup);  /* remove upvalues */
 }

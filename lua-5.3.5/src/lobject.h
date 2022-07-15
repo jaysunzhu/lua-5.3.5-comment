@@ -51,8 +51,8 @@
 ** 2 - regular C function (closure)
 */
 /*
-** lua中的函数总共有三种类型，一种是lua闭包，一种是没有自由变量的C函数，
-** 一种是有自由变量的C函数，即C闭包。
+** lua中的函数总共有三种类型，一种是lua闭包，一种是没有upvalue的C函数，
+** 一种是有upvalue的C函数，即C闭包。
 */
 
 /* Variant tags for functions */
@@ -419,7 +419,7 @@ typedef struct TString {
     struct TString *hnext;  /* linked list for hash table */
   } u;
   //内存对象模型中，TString后长度为len+1的空间就是字符串所在内存
-  char *temp;//debug使用
+  char *pData;//debug使用
 } TString;
 
 
@@ -510,7 +510,7 @@ typedef union UUdata {
 /*
 ** Description of an upvalue for function prototypes
 */
-/* lua函数自由变量描述信息 */
+/* lua函数upvalue描述信息 */
 typedef struct Upvaldesc {
   //当外层函数并没有退出时，我们调用刚生成的闭包，这个时候闭包更像一个普通的内嵌函数。外层函数
   // 的局部变量只是数据栈上的一个普通变量，虚拟机用一个数据栈上的索引映射局部变量，内嵌函数可以通过
@@ -614,7 +614,7 @@ typedef struct UpVal UpVal;
 /*
 ** Closures
 */
-/* 闭包头的定义，nupvalues是闭包所含有的自由变量的个数 */
+/* 闭包头的定义，nupvalues是闭包所含有的upvalue的个数 */
 //参考linkgclist
 #define ClosureHeader \
 	CommonHeader; lu_byte nupvalues; GCObject *gclist
@@ -624,7 +624,7 @@ typedef struct CClosure {
   ClosureHeader;
   /* 函数指针 */
   lua_CFunction f;
-  /* C Closure对应的自由变量列表 */
+  /* C Closure对应的upvalue列表 */
   //和 Lua 闭包不同，在 C 函数中不会去引用外层函数中的局部变量。 所以，C 闭包中的 upval 天生就是关闭状态的
   TValue upvalue[1];  /* list of upvalues */
 } CClosure;
@@ -635,7 +635,7 @@ typedef struct LClosure {
   ClosureHeader;
   struct Proto *p; /* 存放lua闭包对应的函数原型信息 */
 
-	/* lua闭包所使用的自由变量列表 */
+	/* lua闭包所使用的upvalue列表 */
   
   //Lua Closure对象的upval有两种来源，
   //第一、Lua 闭包一般在虚拟机运行的过程中被动态构造出来的。这时，闭包需引用的 upval 都在当前

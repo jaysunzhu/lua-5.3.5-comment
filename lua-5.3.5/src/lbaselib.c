@@ -453,7 +453,6 @@ static int luaB_tostring (lua_State *L) {
   return 1;
 }
 
-
 static const luaL_Reg base_funcs[] = {
   {"assert", luaB_assert},
   {"collectgarbage", luaB_collectgarbage},
@@ -500,7 +499,7 @@ LUAMOD_API int luaopen_base (lua_State *L) {
 
   /* 
   ** 将全局变量base_funcs中的函数及其名字注册到此时位于栈顶部_G table中，键值是函数的名字，
-  ** 内容就是ll_funcs中定义的函数对应的CClosure对象。另外注意到base_funcs中的函数没有自由变量。
+  ** 内容就是ll_funcs中定义的函数对应的CClosure对象。另外注意到base_funcs中的函数没有upvalue。
   */
   luaL_setfuncs(L, base_funcs, 0);
   

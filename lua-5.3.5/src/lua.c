@@ -737,6 +737,13 @@ static int pmain (lua_State *L) {
   /* 加载lua中的标准库 */
   luaL_openlibs(L);  /* open standard libraries */
 
+    // int top = lua_gettop(L);
+		// lua_getglobal(L, "require");
+		// lua_pushstring(L, "test");
+		// lua_call(L,1,1);
+    // lua_settop(L,top);
+
+
   /* 创建一个arg表，包含了所有的命令行参数，索引为数字。然后添加到全局表_G中。 */
   createargtable(L, argv, argc, script);  /* create table 'arg' */
 

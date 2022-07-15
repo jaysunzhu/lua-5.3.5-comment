@@ -246,10 +246,12 @@ OP_CALL,/*	A B C	R(A), ... ,R(A+C-2) := R(A)(R(A+1), ... ,R(A+B-1)) */
 OP_TAILCALL,/*	A B C	return R(A)(R(A+1), ... ,R(A+B-1))		*/
 OP_RETURN,/*	A B	return R(A), ... ,R(A+B-2)	(see note)	*/
 
+//简单的数字循环
 OP_FORLOOP,/*	A sBx	R(A)+=R(A+2);
 			if R(A) <?= R(A+1) then { pc+=sBx; R(A+3)=R(A) }*/
 OP_FORPREP,/*	A sBx	R(A)-=R(A+2); pc+=sBx				*/
 
+//复杂的迭代器
 OP_TFORCALL,/*	A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));	*/
 OP_TFORLOOP,/*	A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx }*/
 

@@ -130,8 +130,8 @@ static int luaB_coresume (lua_State *L) {
 /* luaB_cowrap()的辅助函数 */
 static int luaB_auxwrap (lua_State *L) {
   /* 
-  ** 取出该函数的索引值为1的自由变量，从luaB_cowrap()中知道，luaB_auxwrap()其实就一个自由变量，
-  ** 该自由变量就是新创建的线程对象。
+  ** 取出该函数的索引值为1的upvalue，从luaB_cowrap()中知道，luaB_auxwrap()其实就一个upvalue，
+  ** 该upvalue就是新创建的线程对象。
   */
   lua_State *co = lua_tothread(L, lua_upvalueindex(1));
 
@@ -199,14 +199,14 @@ static int luaB_cowrap (lua_State *L) {
   ** 创建一个协程（其实也就是一个lua线程），协程中要执行的函数已经放入到新创建的
   ** 协程对应的lua_State对象的栈顶部了。同时包含了协程对应的lua_State对象的TValue对象
   ** 此时就位于当前线程L的栈顶部。新创建的线程lua_State对象会作为函数luaB_auxwrap()
-  ** 的一个自由变量。
+  ** 的一个upvalue。
   */
   luaB_cocreate(L);
 
   /*
   ** 程序执行到这里，新创建的线程此时就位于栈顶部，在lua_pushcclosure()函数中，会创建一个
   ** 函数luaB_auxwrap对应的CClosure对象，并将此时位于栈顶部的新创建的协程当作该函数的一个
-  ** 自由变量，同时将该CClosure对象压入当前线程的栈顶部。
+  ** upvalue，同时将该CClosure对象压入当前线程的栈顶部。
   */
   lua_pushcclosure(L, luaB_auxwrap, 1);
   return 1;

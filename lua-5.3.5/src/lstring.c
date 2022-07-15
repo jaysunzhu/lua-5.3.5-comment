@@ -242,11 +242,7 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
   TString **list = &g->strt.hash[lmod(h, g->strt.size)];  /* 找到对应的hash桶 */
   lua_assert(str != NULL);  /* otherwise 'memcmp'/'memcpy' are undefined */
 
-  /*
-  ** 遍历这个hash桶中的字符串链表，查找是否有相同内容的字符串对象，如果找到了，
-  ** 就复用这个字符串对象并返回。isdead()用于判断是否该字符串对象处于待回收状态，
-  ** 如果处于待回收状态，那么就将其待回收状态撤销。
-  */
+  //可能存在hash冲突
   for (ts = *list; ts != NULL; ts = ts->u.hnext) {
     //创建过程是需要比长度和内存对比，由于短字符串有且只有一份，后续比较只需要比较TString地址即可
     if (l == ts->shrlen &&
@@ -258,10 +254,8 @@ static TString *internshrstr (lua_State *L, const char *str, size_t l) {
     }
   }
 
-  /*
-  ** 判断是否需要进行重hash，如果整个hash表中字符串的数量大于hash桶的数量，并且
-  ** hash桶的数量不大于MAX_INT/2，那么就进行重hash
-  */
+
+  //数量大于hash桶数，扩张
   if (g->strt.nuse >= g->strt.size && g->strt.size <= MAX_INT/2) {
     luaS_resize(L, g->strt.size * 2);
     list = &g->strt.hash[lmod(h, g->strt.size)];  /* recompute with new size */

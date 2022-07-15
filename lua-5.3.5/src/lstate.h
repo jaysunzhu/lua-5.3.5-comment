@@ -219,7 +219,8 @@ typedef struct global_State {
   */
   stringtable strt;  /* hash table for strings */
   
-  //其中l_registry下标为2（LUA_RIDX_GLOBALS）是全局表,下标为1（LUA_RIDX_MAINTHREAD）是mainthread
+  //LUA_REGISTRYINDEX对于的table。其中l_registry下标为2（LUA_RIDX_GLOBALS）是全局表,下标为1（LUA_RIDX_MAINTHREAD）是mainthread；
+  //hash部分还会存储其他，如
   TValue l_registry;
 
   /* lua中进行hash操作时的随机种子，例如给字符串对象进行hash时，会使用该成员的值。 */
@@ -235,7 +236,15 @@ typedef struct global_State {
   
   //记录当前sweep的进度，有可能是allgc，也有可能是finobj、tobefnz
   GCObject **sweepgc;  /* current position of sweep in list */
-  
+
+
+  //Because the object being collected must still be used by the finalizer,
+  //that object (and other objects accessible only through it) must be resurrected by Lua.
+  //Usually, this resurrection is transient, and the object memory is freed in the next garbage-collection cycle.
+  //However, if the finalizer stores the object in some global place (e.g., a global variable), then the resurrection is permanent.
+  //Moreover, if the finalizer marks a finalizing object for finalization again,
+  //its finalizer will be called again in the next cycle where the object is unreachable.
+  //In any case, the object memory is freed only in a GC cycle where the object is unreachable and not marked for finalization.
   //finalizers是含有GC元方法的的table和userdata的列表
   GCObject *finobj;  /* list of collectable objects with finalizers */
   //首次从白色被标记为灰色的时候，会被放入这个列表，放入这个列表的gc对象，是准备被propagate的对象
@@ -264,10 +273,13 @@ typedef struct global_State {
   struct lua_State *twups;  /* list of threads with open upvalues */
   //默认是1，以2的倍数变大
   unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
-  
-  //一次完整GC后，下次进入GC step的增长倍数。默认200%，可以通过collectgarbage("setpause")设置
+
+  // Both use percentage points as units (e.g., a value of 100 means an internal value of 1).
+  //一次完整GC后，下次进入GC step的增长百分比。.
+  //A value of 200 means that the collector waits for the total memory in use to double before starting a new cycle
   int gcpause;  /* size of pause between successive GCs */
-  //一个和GC单次处理多少字节相关的参数,可以通过collectgarbage("setstepmul")设置
+  //multiplier controls the relative speed of the collector relative to memory allocation。
+  //The default is 200, which means that the collector runs at "twice" the speed of memory allocation
   int gcstepmul;  /* GC 'granularity' */
   
   // 当调用LUA_THROW接口时，如果当前不处于保护模式，那么会直接调用panic函数

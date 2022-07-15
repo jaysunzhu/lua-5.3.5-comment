@@ -858,7 +858,7 @@ static void dothecall (lua_State *L, void *ud) {
   luaD_callnoyield(L, L->top - 2, 0);
 }
 
-
+//TODO 所有拥有 gc 元方法的 userdata 对象以及其关联的数据，实际上都不会在之前的清除阶段被清除。（由于单独做过标记）所有的元方法调用都是安全的。而它们的实际清除，则需等到下一次 GC 流程了。或是在 lua_close 被调用时清除
 static void GCTM (lua_State *L, int propagateerrors) {
   global_State *g = G(L);
   const TValue *tm;

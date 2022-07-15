@@ -42,7 +42,7 @@ LClosure *luaF_newLclosure (lua_State *L, int n) {
 /*
 ** fill a closure with new closed upvalues
 */
-//在编译过程，申请用于存放闭包中将使用到的自由变量所需要的内存 
+//在编译过程，申请用于存放闭包中将使用到的upvalue所需要的内存 
 void luaF_initupvals (lua_State *L, LClosure *cl) {
   int i;
   for (i = 0; i < cl->nupvalues; i++) {

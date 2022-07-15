@@ -41,7 +41,7 @@
 ** space after that to help overflow detection)
 */
 
-/* 全局注册表和函数的自由变量用的都是伪索引。如果利用伪索引获取对应的地址，参考index2addr() */
+/* 全局注册表和函数的upvalue用的都是伪索引。如果利用伪索引获取对应的地址，参考index2addr() */
 
 /* 
 ** 伪栈索引，即这个索引所代表的地址并不在栈中。这个索引是lua中预定义的注册表的索引，
@@ -51,10 +51,10 @@
 #define LUA_REGISTRYINDEX	(-LUAI_MAXSTACK - 1000)
 
 /*
-** 当一个C函数被调用的时候，它的所有自由变量都会存在某个特定的地方，宏lua_upvalueindex()
-** 就是用来获取其自由变量的栈索引（其实也是一个伪栈索引）。例如某个被调用C函数有n个自由变量，
-** 那么lua_upvalueindex(1)就是其第一个自由变量，lua_upvalueindex(n)是其第n个自由变量。
-** C函数的自由变量是存放在对应的CClosure对象的upavlue数组成员中。
+** 当一个C函数被调用的时候，它的所有upvalue都会存在某个特定的地方，宏lua_upvalueindex()
+** 就是用来获取其upvalue的栈索引（其实也是一个伪栈索引）。例如某个被调用C函数有n个upvalue，
+** 那么lua_upvalueindex(1)就是其第一个upvalue，lua_upvalueindex(n)是其第n个upvalue。
+** C函数的upvalue是存放在对应的CClosure对象的upavlue数组成员中。
 */
 #define lua_upvalueindex(i)	(LUA_REGISTRYINDEX - (i))
 
@@ -424,10 +424,13 @@ LUA_API void      (lua_setallocf) (lua_State *L, lua_Alloc f, void *ud);
 ** 将栈顶部元素插入到栈索引值为idx的栈单元，同时将栈顶部和idx之间（包括索引值idx的栈单元）的
 ** 所有栈单元值依次往上挪一个栈单元。
 */
+//top-1插入到到idx，原[idx,top-1)向top移动一位，idx可正可负。stack数量不变
 #define lua_insert(L,idx)	lua_rotate(L, (idx), 1)
 
+//删除idx，[idx-1,top)下stack方向移动一位。stack数量-1
 #define lua_remove(L,idx)	(lua_rotate(L, (idx), -1), lua_pop(L, 1))
 
+//top-1替换idx。stack数量-1
 #define lua_replace(L,idx)	(lua_copy(L, -1, (idx)), lua_pop(L, 1))
 
 /* }============================================================== */
@@ -539,7 +542,7 @@ struct lua_Debug {
   /* 函数定义结束处的行号 */
   int lastlinedefined;	/* (S) */
 
-  /* 函数自由变量的个数 */
+  /* 函数upvalue的个数 */
   unsigned char nups;	/* (u) number of upvalues */
 
   /* 函数参数的个数 */

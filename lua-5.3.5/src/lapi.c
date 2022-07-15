@@ -87,10 +87,10 @@ static TValue *index2addr (lua_State *L, int idx) {
   else {  /* upvalues */
   	/*
   	** 这个地方需要结合lua_upvalueindex()这个宏来理解，假如我想要获取当前被调用C函数的第i（
-  	** 从1开始算）个自由变量，那么在调用index2addr()获取自由变量的地址时，我们要先通过调用宏
-  	** lua_upvalueindex()来获取传递给index2addr()的自由变量对应的索引值，那么宏lua_upvalueindex(i)
+  	** 从1开始算）个upvalue，那么在调用index2addr()获取upvalue的地址时，我们要先通过调用宏
+  	** lua_upvalueindex()来获取传递给index2addr()的upvalue对应的索引值，那么宏lua_upvalueindex(i)
   	** 返回的就是LUA_REGISTRYINDEX - (i)，即在这里index2addr()参数中的idx = (LUA_REGISTRYINDEX - (i))，
-  	** 那么下面的这条语句执行完之后，idx = i，也就是我们所需要的自由变量的编号。由于在lua中数组从1开始
+  	** 那么下面的这条语句执行完之后，idx = i，也就是我们所需要的upvalue的编号。由于在lua中数组从1开始
   	** 编号，而C中从0开始编号，因此用idx去索引upvalue数组时要减1。
   	*/
     idx = LUA_REGISTRYINDEX - idx;
@@ -98,7 +98,7 @@ static TValue *index2addr (lua_State *L, int idx) {
     if (ttislcf(ci->func))  /* light C function? */
       return NONVALIDVALUE;  /* it has no upvalues */
     else {
-      /* C闭包含有自由变量，且存放在CClosure的upvalue数组成员中。这里返回upvalue数组元素的地址 */
+      /* C闭包含有upvalue，且存放在CClosure的upvalue数组成员中。这里返回upvalue数组元素的地址 */
       CClosure *func = clCvalue(ci->func);
       return (idx <= func->nupvalues) ? &func->upvalue[idx-1] : NONVALIDVALUE;
     }
@@ -204,8 +204,8 @@ LUA_API int lua_gettop (lua_State *L) {
 
 /* 
 ** 重新设置堆栈的堆栈指针，
-** idx >= 0时，L->top = L->ci_func + 1 + idx；
-** idx < 0时，L->top= L->top + 1 + idx 
+** idx >= 0时，设置L->top， L->top = L->ci_func + 1 + idx；
+** idx < 0时，减少L->top，L->top= L->top + 1 + idx 
 */
 LUA_API void lua_settop (lua_State *L, int idx) {
   /* 当前正在进行的函数调用对应的Closure对象所在栈单元 */
@@ -214,7 +214,7 @@ LUA_API void lua_settop (lua_State *L, int idx) {
   if (idx >= 0) {
     /* idx >= 0时，检查上层传入的idx会不会超过整个堆栈的剩余的长度 */
     api_check(L, idx <= L->stack_last - (func + 1), "new top too large");
-	/* 将从[func+1, func+1+idx]这部分的堆栈内容设置为nil */
+	  //数据栈的数据存在脏数据情况，故将比当前top要高的部分进行清理
     while (L->top < (func + 1) + idx)
       setnilvalue(L->top++);
     /* 更新堆栈指针，如果idx > 0，那么就是func+1+idx */
@@ -250,6 +250,11 @@ static void reverse (lua_State *L, StkId from, StkId to) {
 ** Let x = AB, where A is a prefix of length 'n'. Then,
 ** rotate x n == BA. But BA == (A^r . B^r)^r.
 */
+//Rotates the stack elements between the valid index idx and the top of the stack
+//n >= 0, The elements are rotated n positions in the direction of the top
+//n < 0 -n positions in the direction of the bottom
+//n > 0 旋转前A:[idx,top - 1 - n ]B:[top - n,top)
+//n < 0 旋转前A:[idx,idx - n - 1 ]B:[idx - n,top)
 LUA_API void lua_rotate (lua_State *L, int idx, int n) {
   StkId p, t, m;
   lua_lock(L);
@@ -264,7 +269,7 @@ LUA_API void lua_rotate (lua_State *L, int idx, int n) {
   lua_unlock(L);
 }
 
-
+//copy from fromidx to toidex
 LUA_API void lua_copy (lua_State *L, int fromidx, int toidx) {
   TValue *fr, *to;
   lua_lock(L);
@@ -314,8 +319,8 @@ LUA_API const char *lua_typename (lua_State *L, int t) {
 
 /*
 ** lua_iscfunction()函数用于判断在堆栈中索引值为idx的Value对象是不是一个函数，
-** 注意，在lua中函数分为了两种类型，一种是没有自由变量的轻量级函数，另一种是闭包，
-** 即带有自由变量的函数。
+** 注意，在lua中函数分为了两种类型，一种是没有upvalue的轻量级函数，另一种是闭包，
+** 即带有upvalue的函数。
 */
 LUA_API int lua_iscfunction (lua_State *L, int idx) {
   StkId o = index2addr(L, idx);
@@ -735,20 +740,18 @@ static int auxgetstr (lua_State *L, const TValue *t, const char *k) {
   
   /* 根据k来创建table的键值对象 */
   TString *str = luaS_new(L, k);
-  /* 
-  ** 首先尝试直接从table t中获取键值为k的value对象，如果获取成功且value对象不为nil，
-  ** 则存放入slot中，之后将slot中的内容压入堆栈顶部，并更新堆栈指针。如果获取失败或者
-  ** 获取到的value对象为nil，则先将键值对象str压入堆栈，并更新堆栈指针，然后由于之前
-  ** 获取到的value对象为nil或者获取失败（t不是table类型），这个时候调用luaV_finishget()
-  ** 尝试用table的元表中进行获取，结果也会压入堆栈。
-  */
+
   if (luaV_fastget(L, t, str, slot, luaH_getstr)) {
+    //在table内取到数据
     setobj2s(L, L->top, slot);
     api_incr_top(L);
   }
   else {
+    //t不是table(slot == NULL)，或者无法在table内获取数据(slot == luaO_nilobject)
+    //出发元方法__index
     setsvalue2s(L, L->top, str);
     api_incr_top(L);
+    //L->top - 1作为参数传入，L->top - 1同时也是参数传出
     luaV_finishget(L, t, L->top - 1, L->top - 1, slot);
   }
   lua_unlock(L);
@@ -767,8 +770,8 @@ LUA_API int lua_getglobal (lua_State *L, const char *name) {
 
 
 /* 
-** 以栈顶部元素为键值从栈索引值为idx的table中获取对应的TValue对象，获取到TValue对象
-** 之后，将该对象覆盖写到键值对象所在位置，同时返回该对象的类型。注意栈指针L->top没变。
+Pushes onto the stack the value t[k], where t is the value at the given index and k is the value at the top of the stack.
+This function pops the key from the stack, pushing the resulting value in its place. As in Lua, this function may trigger a metamethod for the "index" event 
 */
 LUA_API int lua_gettable (lua_State *L, int idx) {
   StkId t;
@@ -781,10 +784,7 @@ LUA_API int lua_gettable (lua_State *L, int idx) {
 
 
 /*
-** lua_getfield()函数首先调用index2addr()返回索引值idx对应的table的内存地址，
-** 然后调用auxgestr()函数从上面这个table中获取键值为k对应的value对象，并将这个
-** value对象压入堆栈，并返回这个value对象的类型。执行完lua_getfield()之后，位于
-** 堆栈顶部的元素就是从table中获取到的value对象。
+Pushes onto the stack the value t[k], where t is the value at the given index. As in Lua, this function may trigger a metamethod for the "index" event
 */
 LUA_API int lua_getfield (lua_State *L, int idx, const char *k) {
   lua_lock(L);
@@ -792,18 +792,24 @@ LUA_API int lua_getfield (lua_State *L, int idx, const char *k) {
 }
 
 //idx是table 在stack的slot idx，n是arrayindex编号（1开始算）
+//lua_geti.this function may trigger a metamethod for the "index" event
+//lua_rawgeti.The access is raw, that is, it does not invoke the __index metamethod
 LUA_API int lua_geti (lua_State *L, int idx, lua_Integer n) {
   StkId t;
   const TValue *slot;
   lua_lock(L);
   t = index2addr(L, idx);
   if (luaV_fastget(L, t, n, slot, luaH_getint)) {
+    //在table内取到数据
     setobj2s(L, L->top, slot);
     api_incr_top(L);
   }
   else {
+    //t不是table(slot == NULL)，或者无法在table内获取数据(slot == luaO_nilobject)
+    //触发元方法__index
     setivalue(L->top, n);
     api_incr_top(L);
+    //L->top - 1作为参数传入，L->top - 1同时也是参数传出
     luaV_finishget(L, t, L->top - 1, L->top - 1, slot);
   }
   lua_unlock(L);
@@ -822,10 +828,9 @@ LUA_API int lua_rawget (lua_State *L, int idx) {
 }
 
 
-/* 
-** 从栈索引值（可能是伪索引）为idx处的table中，以n为键值，获取相应的TValue对象，
-** 并压入栈顶部，然后返回TValue对象实际的数据类型。
-*/
+//idx是table 在stack的slot idx，n是arrayindex编号（1开始算）
+//lua_geti.this function may trigger a metamethod for the "index" event
+//lua_rawgeti.The access is raw, that is, it does not invoke the __index metamethod
 LUA_API int lua_rawgeti (lua_State *L, int idx, lua_Integer n) {
   StkId t;
   lua_lock(L);
