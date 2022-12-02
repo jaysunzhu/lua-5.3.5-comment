@@ -23,7 +23,11 @@
 ** the collection cycle. These lists have no meaning when the invariant
 ** is not being enforced (e.g., sweep phase).
 */
-
+// Invariants：
+//
+// 所有被根集引用的对象要么是黑色，要么是灰色的。
+//
+// 黑色的对象不可能指向白色的。
 
 
 /* how much to allocate before next GC step */
@@ -143,9 +147,11 @@
 //并且被已经被标记为黑色的对象引用，这种gc算法，是不能将黑色的对象，直接引用白色的对象的，
 //因为黑色的对象已经标记和扫描完毕，本轮gc不会再进行扫描，这样被其引用的白色对象也不会被标记和扫描到，
 //到了sweep阶段，因为新创建的对象未被标记和扫描，因此会被当做不可达的对象被清除掉，造成不可挽回的后果
+
 //barrier分为两种，一种是向前设置barrier,还有一种则是向后设置barrier。
 //向前barrier的情况，适用于已被标记为黑色的对象类型，为不会频繁改变引用关系的数据类型，如lua的proto结构。
 //而向后barrier的情况，适合被标记为黑色的对象类型，为会出现频繁改变引用关系情况的数据类型，如lua的table结构，
+
 //也就是说，在两次调用gc功能的过程中，table中的同一个key，可能被赋值多个value，如果把这些value对象均标记为灰色，
 //并放入gray列表，那么将会造成许多无谓的标记和扫描操作，因为这些value很可能不再被引用，需要被回收，
 //因此，只要把已经被标记为黑色的table，重新设置为灰色，是避开这个性能问题的良好方式。
@@ -158,7 +164,7 @@
 	(iscollectable(v) && isblack(p) && iswhite(gcvalue(v))) ?  \
 	luaC_barrier_(L,obj2gco(p),gcvalue(v)) : cast_void(0))
 
-//参考luaC_barrierback_
+//加入限定条件。参考luaC_barrierback_
 #define luaC_barrierback(L,p,v) (  \
 	(iscollectable(v) && isblack(p) && iswhite(gcvalue(v))) ? \
 	luaC_barrierback_(L,p) : cast_void(0))

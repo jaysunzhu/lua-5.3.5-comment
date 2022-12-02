@@ -142,7 +142,7 @@ typedef int (*lua_CFunction) (lua_State *L);
 // All those functions receive a continuation function (as a parameter named k) to continue execution after a yield.
 
 //lua_KFunction k 参考https://www.lua.org/manual/5.3/manual.html#4.7
-//TODO 没搞懂
+//参考luaB_yield和luaB_xpcall
 typedef int (*lua_KFunction) (lua_State *L, int status, lua_KContext ctx);
 
 

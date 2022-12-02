@@ -263,6 +263,7 @@ static void correctstack (lua_State *L, TValue *oldstack) {
   //算法 新指针=L->stack新地址+旧的距离
   L->top = (L->top - oldstack) + L->stack;
   //upvalue 为open时候，open的upvalue数据在栈上
+  //UpVal是对TValue的引用，由于stack地址变换，故openupval上的引用也需要调整
   for (up = L->openupval; up != NULL; up = up->u.open.next)
     up->v = (up->v - oldstack) + L->stack;
   
@@ -280,6 +281,7 @@ static void correctstack (lua_State *L, TValue *oldstack) {
 #define ERRORSTACKSIZE	(LUAI_MAXSTACK + 200)
 
 
+//Lua 数据栈内存分配
 void luaD_reallocstack (lua_State *L, int newsize) {
   /* 保存旧栈地址 */
   TValue *oldstack = L->stack;
@@ -303,13 +305,13 @@ void luaD_reallocstack (lua_State *L, int newsize) {
 }
 
 
-/* 扩充栈 */
+/* 数据栈扩充 */
 void luaD_growstack (lua_State *L, int n) {
   int size = L->stacksize;
   if (size > LUAI_MAXSTACK)  /* error after extra size? */
     luaD_throw(L, LUA_ERRERR);
   else {
-  	/* 计算扩充后栈的大小 */
+  	//计算扩充后栈的大小，2倍的方式扩张
     int needed = cast_int(L->top - L->stack) + n + EXTRA_STACK;
     int newsize = 2 * size;
     if (newsize > LUAI_MAXSTACK) newsize = LUAI_MAXSTACK;
@@ -333,7 +335,9 @@ void luaD_growstack (lua_State *L, int n) {
 static int stackinuse (lua_State *L) {
   CallInfo *ci;
   StkId lim = L->top;
-  for (ci = L->ci; ci != NULL; ci = ci->previous) {
+  for (ci = L->ci; ci != NULL; ci = ci->previous){
+    //ci->previous表示的是当前正在被调用的函数的调用者所对应的CallInfo对象
+    //极少情况是previous比cur的top要高，是什么情况列？
     if (lim < ci->top) lim = ci->top;
   }
   lua_assert(lim <= L->stack_last);
@@ -341,15 +345,17 @@ static int stackinuse (lua_State *L) {
 }
 
 
-/* 压缩栈 */
+/* 数据栈压缩 */
 void luaD_shrinkstack (lua_State *L) {
   int inuse = stackinuse(L);
+  //压缩算法，保留使用大小（1+8分之1）
   int goodsize = inuse + (inuse / 8) + 2*EXTRA_STACK;
   if (goodsize > LUAI_MAXSTACK)
     goodsize = LUAI_MAXSTACK;  /* respect stack limit */
   if (L->stacksize > LUAI_MAXSTACK)  /* had been handling stack overflow? */
     luaE_freeCI(L);  /* free all CIs (list grew because of an error) */
   else
+    //压缩CallInfo数组，一半数量
     luaE_shrinkCI(L);  /* shrink list */
   /* if thread is currently not handling a stack overflow and its
      good size is smaller than current size, shrink its stack */

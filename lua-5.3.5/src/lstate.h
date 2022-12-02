@@ -245,31 +245,38 @@ typedef struct global_State {
   //Moreover, if the finalizer marks a finalizing object for finalization again,
   //its finalizer will be called again in the next cycle where the object is unreachable.
   //In any case, the object memory is freed only in a GC cycle where the object is unreachable and not marked for finalization.
-  //finalizers是含有GC元方法的的table和userdata的列表
+  
+  //finalizers是含有GC元方法的的table和userdata的列表，时机：setmetatable时，检查是否含有__gc元方法，若有才会从allgc移到finobj，插到链表头
   GCObject *finobj;  /* list of collectable objects with finalizers */
-  //首次从白色被标记为灰色的时候，会被放入这个列表，放入这个列表的gc对象，是准备被propagate的对象
 
   //gray、grayagain
   //GCSpropagate阶段，需要对gray链表处理
   GCObject *gray;  /* list of gray objects */
   //grayagain，retraverse it in atomic phase。
   //比如table对象barrierback，从黑色变回灰色时，会放入grayagain中，作用是避免table反复在黑色和灰色之间来回切换重复扫描
-  //比如弱表需要在atomic phase再次处理，LUA_TTHREAD类型直接延迟到atomic phase处理
+  //比如弱key和弱value两种弱表，不含allweak需要在atomic phase再次处理，
+  //比如mainthread和协程等LUA_TTHREAD类型直接延迟到atomic phase处理
   GCObject *grayagain;  /* list of objects to be traversed atomically */
 
   //weak、ephemeron、allweak
+  //在atomic阶段，任何弱value为白色的弱表就放到weak，等待清理键对
   GCObject *weak;  /* list of tables with weak values */
+  //在atomic阶段，任何弱key和value都白色的的弱表会放到ephemeron，等待清理
   GCObject *ephemeron;  /* list of ephemeron tables (weak keys) */
+  //在atomic阶段，任何弱key弱value的弱表会放到allweak
+  //在atomic阶段，任何弱key是白色的的弱表会放到allweak，处理方式同allweak
   GCObject *allweak;  /* list of all-weak tables */
   
-  //to be finalized，即将GC的userdata（含GC元方法）的列表
+  //to be finalized，即将GC的table和userdata（含GC元方法）的链表。
   //插入到列表尾
   GCObject *tobefnz;  /* list of userdata to be GC */
   
-  /* 用于保存不被GC回收的对象，如lua中关键字对应的TString对象，元方法对应的TString对象等等 */
+  //用于保存不被GC回收的对象，如lua中保留字对应的TString对象，元方法对应的TString对象等等。都在在虚拟机初始化时候，从allgc移到finobj
   GCObject *fixedgc;  /* list of objects not to be collected */
 
+  //upvalue在栈的Lua_State链表
   //单向链表，插入链表头。通过lua_State.twups作为next
+  //global_State twups是链表头，lua_State twups作为链表的next
   struct lua_State *twups;  /* list of threads with open upvalues */
   //默认是1，以2的倍数变大
   unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
@@ -375,13 +382,16 @@ struct lua_State {
 
   /* 栈的起始地址 */
   StkId stack;  /* stack base */
-  //插入数据来源数据栈stack，而且还是比较新（即slot就高）。由于插入到头部缘故，所以openupval的头是对于stack的高地址部分
-  //openupval是有序的，头的数据靠近stack的top，尾部靠近stack的七尺
+  
+  //插入数据来源数据栈，将lua stack上为upvalue的数据用链表链接。
+  //链表openupval是无序的，lua stack是连续的，是在函数调用过程level是有序的，如果要close或者find openupval的upvalue，需要遍历所有node，并比较level
   UpVal *openupval;  /* list of open upvalues in this stack */
   //参考linkgclist
   GCObject *gclist;
 
-  //初始状态就是当前L，表示为 thread has no upvalues 
+  //初始状态就是当前L，表示为 thread has no upvalues
+  //twups不指向自己，指向别的lua_State，表示lua_State有 upvalues
+  //global_State twups是链表头，lua_State twups作为链表的next
   struct lua_State *twups;  /* list of threads with open upvalues */
 
   /*
@@ -417,7 +427,7 @@ struct lua_State {
   int hookcount;
 
   /* 线程中不可中断的函数调用数 */
-  //nny = 0表示可中断yieldable
+  //nny = 0表示可中断yieldable，参考luaB_yieldable
   unsigned short nny;  /* number of non-yieldable calls in stack */
 
   /* 嵌套调用的函数的层数 */

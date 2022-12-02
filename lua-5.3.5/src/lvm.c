@@ -639,7 +639,7 @@ lua_Integer luaV_shiftl (lua_Integer x, lua_Integer y) {
 ** whether there is a cached closure with the same upvalues needed by
 ** new closure to be created.
 */
-//检查proto 结构中LClosure有且只有1个的cache，需要每个upval地址相同
+//检查proto 结构中LClosure有且只有1个的cache，需要每个upval 的TValue地址相同
 //encup是存放LClosure中的enclosing upvalue
 static LClosure *getcached (Proto *p, UpVal **encup, StkId base) {
   LClosure *c = p->cache;
@@ -648,6 +648,7 @@ static LClosure *getcached (Proto *p, UpVal **encup, StkId base) {
     Upvaldesc *uv = p->upvalues;
     int i;
     for (i = 0; i < nup; i++) {  /* check whether it has right upvalues */
+      //proto 史通过Upvaldesc，区分open还是close来找到upval的TValue
       TValue *v = uv[i].instack ? base + uv[i].idx : encup[uv[i].idx]->v;
       if (c->upvals[i]->v != v)
         return NULL;  /* wrong upvalue; cannot reuse closure */
@@ -675,7 +676,7 @@ static void pushclosure (lua_State *L, Proto *p, UpVal **encup, StkId base,
   setclLvalue(L, ra, ncl);  /* anchor new closure in stack */
   
   for (i = 0; i < nup; i++) {  /* fill in its upvalues */
-    
+    //LClosure中的UpVal，是由proto编译结果决定的
     if (uv[i].instack)  /* upvalue refers to local variable? */
       ncl->upvals[i] = luaF_findupval(L, base + uv[i].idx);
     else  /* get upvalue from enclosing function */
@@ -1505,8 +1506,9 @@ void luaV_execute (lua_State *L) {
         vmbreak;
       }
       vmcase(OP_CLOSURE) {//Lua Closure指令
+        //获取当前closure的内部匿名函数的proto
         Proto *p = cl->p->p[GETARG_Bx(i)];
-        //有且只有1个cache，需要每个upval地址相同
+        //有且唯一的cache，要求每个upval地址相同。proto正常和closure是一一对应
         LClosure *ncl = getcached(p, cl->upvals, base);  /* cached closure */
         if (ncl == NULL)  /* no match? */
           pushclosure(L, p, cl->upvals, base, ra);  /* create a new one */

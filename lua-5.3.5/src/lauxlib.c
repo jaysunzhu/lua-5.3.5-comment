@@ -726,34 +726,37 @@ LUALIB_API char *luaL_buffinitsize (lua_State *L, luaL_Buffer *B, size_t sz) {
 /* index of free-list header */
 #define freelist	0
 
-
+//freelist(数组下标0)保存当前可用的下标
+//ref不为0，加入到t的ref作为的下标处
+//ref为0，加入到t的array的尾部
 LUALIB_API int luaL_ref (lua_State *L, int t) {
+  //stack: table
   int ref;
   if (lua_isnil(L, -1)) {
     lua_pop(L, 1);  /* remove from stack */
     return LUA_REFNIL;  /* 'nil' has a unique fixed reference */
   }
   t = lua_absindex(L, t);
-  lua_rawgeti(L, t, freelist);  /* get first free element */
-  ref = (int)lua_tointeger(L, -1);  /* ref = t[freelist] */
-  lua_pop(L, 1);  /* remove it from stack */
+  lua_rawgeti(L, t, freelist);  /* get first free element */ //stack: table | t[freelist]
+  ref = (int)lua_tointeger(L, -1);  /* ref = t[freelist] */ //freelist(数组下标0)保存当前可用的下标，有一定的性能提升
+  lua_pop(L, 1);  /* remove it from stack */ //stack: table 
   if (ref != 0) {  /* any free element? */
     lua_rawgeti(L, t, ref);  /* remove it from list */
     lua_rawseti(L, t, freelist);  /* (t[freelist] = t[ref]) */
   }
   else  /* no free elements */
-    ref = (int)lua_rawlen(L, t) + 1;  /* get a new reference */
-  lua_rawseti(L, t, ref);
+    ref = (int)lua_rawlen(L, t) + 1;  /* get a new reference */ //插入table的数组尾巴
+  lua_rawseti(L, t, ref); //t[ref] = table。 stack: empty。
   return ref;
 }
 
-
+//freelist(数组下标0)保存当前可用的下标ref，已便于luaL_ref直接去
 LUALIB_API void luaL_unref (lua_State *L, int t, int ref) {
   if (ref >= 0) {
     t = lua_absindex(L, t);
-    lua_rawgeti(L, t, freelist);
+    lua_rawgeti(L, t, freelist);//stack: t[freelist]
     lua_rawseti(L, t, ref);  /* t[ref] = t[freelist] */
-    lua_pushinteger(L, ref);
+    lua_pushinteger(L, ref);//stack: ref
     lua_rawseti(L, t, freelist);  /* t[freelist] = ref */
   }
 }
@@ -964,7 +967,6 @@ LUALIB_API int luaL_loadstring (lua_State *L, const char *s) {
 }
 
 /* }====================================================== */
-
 
 
 LUALIB_API int luaL_getmetafield (lua_State *L, int obj, const char *event) {

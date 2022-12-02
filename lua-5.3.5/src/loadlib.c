@@ -577,31 +577,29 @@ static void findloader (lua_State *L, const char *name) {
   int i;
   luaL_Buffer msg;  /* to build error message */
   luaL_buffinit(L, &msg);
-  /* push 'package.searchers' to index 3 in the stack */
   /* 从包package中获取searchers这个table，并将其压入栈，栈索引值为3。 */
+  //index 3 package.searchers
   if (lua_getfield(L, lua_upvalueindex(1), "searchers") != LUA_TTABLE)
     luaL_error(L, "'package.searchers' must be a table");
   /*  iterate over available searchers to find a loader */
   for (i = 1; ; i++) {
     /* 以整数作为键值遍历package.searchers这个table，获取用于寻找库加载函数的搜索函数，并压入栈顶部 */
+    //index 4 为 搜索函数 闭包,eg.searcher_Lua
     if (lua_rawgeti(L, 3, i) == LUA_TNIL) {  /* no more searchers? */
       lua_pop(L, 1);  /* remove nil */
       luaL_pushresult(&msg);  /* create error message */
       luaL_error(L, "module '%s' not found:%s", name, lua_tostring(L, -1));
     }
 	
-    // index 5 为 name
+    
+    //index 5 为 name
     lua_pushstring(L, name);
-
-	/*
-	** 调用搜索函数，1表示需要函数参数个数为1,2表示函数返回值个数。函数调用的返回值会压入栈顶部。
-	** 每个返回值都会占用一个栈单元。
-	*/
+    
     lua_call(L, 1, 2);  /* call it */
-	/*
-	** 判断函数调用结果的第一个返回值是不是一个函数，如果是一个函数，说明找到了name对应的库加载函数。
-	** 此时库加载函数位于栈次顶部位置。栈顶部是另外一个返回值
-	*/
+    //正常情况
+    //index 4 :the compiled chunk as a Lua function on top of the stack
+    //index 5 :filename
+    
     if (lua_isfunction(L, -2))  /* did it find a loader? */
       return;  /* module loader found */
     else if (lua_isstring(L, -2)) {  /* searcher returned error message? */
@@ -615,83 +613,59 @@ static void findloader (lua_State *L, const char *name) {
 
 /* 关键字requuire的对应的处理函数 */
 static int ll_require (lua_State *L) {
-  /* 
-  ** 获取处于目前函数调用栈的栈索引值为1（对应L->ci->func + 1）的栈元素的内容，以字符串显示结果，
-  ** 即紧跟在require关键字后面的库名，这个是require函数的参数。如require "math"，name这里的name
-  ** 就是"math"。
-  */
+
   const char *name = luaL_checkstring(L, 1);
-  
-  /* 重新设置栈指针L->top，设置完成之后，L->top = L->ci->func + 1 + 1，即存放库名字的栈单元的
-  ** 下一个栈单元。
-  */
+
+  //丢弃name以后的参数
   lua_settop(L, 1);  /* LOADED table will be at index 2 */
   
-  /*
-  ** 从栈索引值（伪索引）为LUA_REGISTRYINDEX的注册表中获取键值为"_LOADED"的table，并压入栈顶部，
-  ** 此时"_LOADED" table在该函数调用栈中的索引值为2。索引值为1的库名字。
-  */
+  //index 2 "_LOADED" table.index为1的库名字。
   lua_getfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
   
-  /* 
-  ** 从位于栈顶部的"_LOADED" table中获取键值为name对应的元素，并将该元素压入栈顶部。如果该库之前
-  ** 没有加载过，那么这个元素应该是一个nil；如果之前加载过，那么就应该是一个库级别的table，存放了
-  ** 对应库的函数和常量等信息。
-  */
+  //index 3 LOADED[name]
   lua_getfield(L, 2, name);  /* LOADED[name] */
 
-  /* 如果该库已经加载过了，就不再加载一遍了，直接使用即可。 */
+  //命中cache,LOADED[name] == table/function为主，就看脚本 return什么
   if (lua_toboolean(L, -1))  /* is it there? */
     return 1;  /* package is already loaded */
-  /* else must load package */
   
-  /* 程序执行到这里，说明require的库还没加载过，那么此时位于栈顶部的元素是无用的，这里将其弹出栈顶部 */
+  
+  //pop index 3
   lua_pop(L, 1);  /* remove 'getfield' result */
 
-  /* 
-  ** 找到库名name对应的库加载函数，此时库加载函数位于栈次顶部单元，而栈顶部单元是搜索库加载函数的
-  ** 搜索函数的第二个返回值，第一个返回值就是库加载函数。
-  */
+  //index 4 :the compiled chunk as a Lua function on top of the stack
+  //index 5 :filename
   findloader(L, name);
 
-  /* 将库名压入栈顶部，作为库加载函数的参数 */
+  //index 6 为 name
   lua_pushstring(L, name);  /* pass name as argument to module loader */
-  /*
-  ** 交换栈顶部的库名和栈次顶部的搜索函数的第二个返回值，交换完成后，栈次顶部是库名字，而栈顶部
-  ** 则是库加载函数的搜索函数的第二个返回值。这两个值都要作为库加载函数的参数，库加载函数的第一个
-  ** 参数一定要是库名字。
-  */
+
+  // index 4 不变（func），index 5 为 name ， index 6 为 filename
   lua_insert(L, -2);  /* name is 1st argument (before search data) */
-  /* 这里会调用库加载函数，库加载的结果（一般来说一个table，包含了库函数和常量）会压入栈顶部 */
+  
+
+  // index 4 为result
   lua_call(L, 2, 1);  /* run loader to load module */
-  /*
-  ** 判断库加载函数的执行结果是不是nil，如果不是nil，则将执行结果以库名name为键值添加到栈索引值为
-  ** 2的"_LOADED" table中，同时将执行结果弹出栈顶部。本函数开始部分已经将"_LOADED" table压入了
-  ** 栈索引值为2的地方。
-  */
+
   if (!lua_isnil(L, -1))  /* non-nil return? */
+    //pop index 4 
     lua_setfield(L, 2, name);  /* LOADED[name] = returned value */
 
-  /*
-  ** 如果库加载函数返回的是nil，那么就以name为键值，将bool值true添加到"_LOADED" table中，
-  ** 表示该库已经加载过了。
-  ** 尝试以库名name从"_LOADED" table中获取对应的值对象（正常情况下是库name的加载函数的执行结果），
-  ** 将获取到的值对象压入栈顶部。判断位于栈顶的值对象是不是nil，是nil的话，那么就以name为键值，
-  ** 将bool值true添加到"_LOADED" table中，表示该库已经加载过了。如果不是nil，那么此时位于栈顶部的
-  ** 就是库name加载函数的执行结果（一般来说是一个table）。
-  */
+  //index 5 LOADED[name]
   if (lua_getfield(L, 2, name) == LUA_TNIL) {   /* module set no value? */
+    // chunk代码没有写return，需加true
+
+    //index 6 true
     lua_pushboolean(L, 1);  /* use true as result */
-    lua_pushvalue(L, -1);  /* extra copy to be returned */ /* 这一步的目的是什么？暂时没看明白 */
+
+    //index 7 true
+    lua_pushvalue(L, -1);  /* extra copy to be returned */
+
+    //pop index 7
     lua_setfield(L, 2, name);  /* LOADED[name] = true */
   }
 
-  /*
-  ** 程序执行到这里，位于栈顶部的是库name加载函数的执行结果（一般来说是该库对应的table），
-  ** 如果将require的结果赋值给一个本地变量，那么就是将这个table赋值给了这个变量。例如：
-  ** local math = require "math"，那么就是将math库对应的table赋值给了math变量。这对于上面那个
-  ** 库已经加载的情况也是一样的。
-  */
+  //要么return index 5 LOADED[name]。如果LOADED[name]=nil, return index 6 true
   return 1;
 }
 

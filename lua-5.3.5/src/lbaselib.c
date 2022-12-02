@@ -127,6 +127,7 @@ static int luaB_setmetatable (lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
   luaL_argcheck(L, t == LUA_TNIL || t == LUA_TTABLE, 2,
                     "nil or table expected");
+  // If the original metatable has a __metatable field, raises an error。想避免错误可以使用debug.setmetatable
   if (luaL_getmetafield(L, 1, "__metatable") != LUA_TNIL)
     return luaL_error(L, "cannot change a protected metatable");
   lua_settop(L, 2);
@@ -183,6 +184,7 @@ static int luaB_collectgarbage (lua_State *L) {
   switch (o) {
     case LUA_GCCOUNT: {
       int b = lua_gc(L, LUA_GCCOUNTB, 0);
+        //单位时KB，res是整数，b/1024为小数点后部分
       lua_pushnumber(L, (lua_Number)res + ((lua_Number)b/1024));
       return 1;
     }
@@ -453,6 +455,13 @@ static int luaB_tostring (lua_State *L) {
   return 1;
 }
 
+static int luaB_sizetable(lua_State *L){
+  int nasize = luaL_checkinteger(L,1);
+  int nhsize = luaL_optinteger(L, 2, 0);
+  lua_createtable(L, nasize, nhsize);
+  return 1;
+}
+
 static const luaL_Reg base_funcs[] = {
   {"assert", luaB_assert},
   {"collectgarbage", luaB_collectgarbage},
@@ -479,6 +488,7 @@ static const luaL_Reg base_funcs[] = {
   {"tostring", luaB_tostring},
   {"type", luaB_type},
   {"xpcall", luaB_xpcall},
+  {"sizetable", luaB_sizetable},
   /* placeholders */
   {"_G", NULL},
   {"_VERSION", NULL},

@@ -707,15 +707,16 @@ static int gmatch_aux (lua_State *L) {
 
 
 static int gmatch (lua_State *L) {
+  //stack: s | pattern 
   size_t ls, lp;
   const char *s = luaL_checklstring(L, 1, &ls);
   const char *p = luaL_checklstring(L, 2, &lp);
   GMatchState *gm;
   lua_settop(L, 2);  /* keep them on closure to avoid being collected */
-  gm = (GMatchState *)lua_newuserdata(L, sizeof(GMatchState));
+  gm = (GMatchState *)lua_newuserdata(L, sizeof(GMatchState)); //stack: s | pattern | GMatchState
   prepstate(&gm->ms, L, s, ls, p, lp);
   gm->src = s; gm->p = p; gm->lastmatch = NULL;
-  lua_pushcclosure(L, gmatch_aux, 3);
+  lua_pushcclosure(L, gmatch_aux, 3);//stack: cclosure(func:gmatch_aux, upvalue:s | pattern | GMatchState)
   return 1;
 }
 

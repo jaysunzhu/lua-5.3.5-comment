@@ -172,9 +172,9 @@ LUALIB_API void (luaL_requiref) (lua_State *L, const char *modname,
 ** 以及全局的状态信息
 */
 typedef struct luaL_Buffer {
-  char *b;  /* buffer address */
-  size_t size;  /* buffer size */
-  size_t n;  /* number of characters in buffer */
+  char *b;  /* buffer address */  //n<LUAL_BUFFERSIZE，b指向initb
+  size_t size;  /* buffer size */ //初始化为LUAL_BUFFERSIZE
+  size_t n;  /* number of characters in buffer */ //初始为0
   lua_State *L;
   char initb[LUAL_BUFFERSIZE];  /* initial buffer */
 } luaL_Buffer;

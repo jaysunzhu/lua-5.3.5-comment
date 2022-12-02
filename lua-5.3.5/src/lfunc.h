@@ -37,21 +37,19 @@
 */
 /* lua闭包中所使用的upvalue信息 */
 struct UpVal {
-// 如果将数据栈上的每个变量都实现成一个独立的对象是没有必要的，尤其是数字、布尔量这类数据类型，
-// 没必要实现成复杂对象。界畵畡 没有采用这种低效的实现方法。它的 upvalue 从实现上来讲，更像是 C 语言中
-// 的指针。它引用了另一个对象。多个闭包可以共享同一个 upvalue ，有如 C 语言中，可以有多份指针指向同
+// 它的 upvalue 从实现上来讲，更像是 C 语言中的指针。
+// 它引用了另一个对象。多个闭包可以共享同一个 upvalue ，有如 C 语言中，可以有多份指针指向同
 // 一个结构体。
-//opend,当被引用的变量还在数据栈上时，这个指针直接指向栈上的地址。这个 upvalue 被称为开放的
-//closed，就是当 upvalue 引用的数据栈上的数据不再存在于栈上时（通常是由申请局部变量的函数返回引起的），需要
-// 把 upvalue 从开放链表中拿掉，并把其引用的数据栈上的变量值换一个安全的地方存放。这个安全所在就是
-// UpVal 结构体内
+//open,当被引用的变量还在数据栈上时，这个指针直接指向栈上的地址。这个 upvalue 被称为开放的
+//close，就是当 upvalue 引用的数据栈上的数据不再存在于栈上时（通常是由申请局部变量的函数返回引起的），需要
+// 从open到close，就是把 upvalue 从openupval链表中拿掉，并把其引用的数据栈上的变量值换一个安全的地方存放。这个安全所在就是UpVal 结构体内
   
   
   //closed，v指向value。opend，v指向stack上slot
   TValue *v;  /* points to stack or to its own value */
 
   //引用计数，为了做GC，无论Upvaldesc.instack是open还是close。0 no references
-  //被闭包引用和lua_upvaluejoin会+1  
+  //新建LClosure引用upvalue和lua_upvaluejoin的fn2 upvalue +1，反之，LClosure释放和lua_upvaluejoin的fn1 upvalue -1
   lu_mem refcount;  /* reference counter */ 
   union {
     struct {  /* (when open) */
@@ -63,7 +61,7 @@ struct UpVal {
   } u;
 
     //说明：
-    //引用计数，为了控制本Upvalue是否需要GC
+    //引用计数，为了控制close Upvalue是否需要GC
     //touched，是open的upvalue，是否需要mark其引用的资源
 };
 

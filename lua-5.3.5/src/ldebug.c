@@ -591,7 +591,9 @@ static const char *varinfo (lua_State *L, const TValue *o) {
   CallInfo *ci = L->ci;
   const char *kind = NULL;
   if (isLua(ci)) {
+    //先找upvalue
     kind = getupvalname(ci, o, &name);  /* check whether 'o' is an upvalue */
+    //
     if (!kind && isinstack(ci, o))  /* no? try a register */
       kind = getobjname(ci_func(ci)->p, currentpc(ci),
                         cast_int(o - ci->u.l.base), &name);

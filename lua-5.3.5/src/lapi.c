@@ -680,7 +680,7 @@ LUA_API void lua_pushcclosure (lua_State *L, lua_CFunction fn, int n) {
     api_checknelems(L, n);
     api_check(L, n <= MAXUPVAL, "upvalue index too large");
 	
-    cl = luaF_newCclosure(L, n);
+    cl = luaF_newCclosure(L, n);// 新建一个Cclosure
     cl->f = fn;
 
     L->top -= n;
@@ -691,7 +691,7 @@ LUA_API void lua_pushcclosure (lua_State *L, lua_CFunction fn, int n) {
 
     setclCvalue(L, L->top, cl);
     api_incr_top(L);
-    luaC_checkGC(L);
+    luaC_checkGC(L);// 将栈顶设置为这个cclousure
   }
   lua_unlock(L);
 }
@@ -1095,7 +1095,7 @@ LUA_API int lua_setmetatable (lua_State *L, int objindex) {
       hvalue(obj)->metatable = mt;
       if (mt) {
         luaC_objbarrier(L, gcvalue(obj), mt);
-        luaC_checkfinalizer(L, gcvalue(obj), mt);
+        luaC_checkfinalizer(L, gcvalue(obj), mt);//有__gc元方法，在gc链表上需要处理
       }
       break;
     }
@@ -1103,7 +1103,7 @@ LUA_API int lua_setmetatable (lua_State *L, int objindex) {
       uvalue(obj)->metatable = mt;
       if (mt) {
         luaC_objbarrier(L, uvalue(obj), mt);
-        luaC_checkfinalizer(L, gcvalue(obj), mt);
+        luaC_checkfinalizer(L, gcvalue(obj), mt);//有__gc元方法，在gc链表上需要处理
       }
       break;
     }
@@ -1194,7 +1194,6 @@ static void f_call (lua_State *L, void *ud) {
 /*
 ** 以保护模式来运行栈中的函数调用
 */
-//lua_KFunction k 参考https://www.lua.org/manual/5.3/manual.html#4.7
 LUA_API int lua_pcallk (lua_State *L, int nargs, int nresults, int errfunc,
                         lua_KContext ctx, lua_KFunction k) {
   struct CallS c;
@@ -1497,7 +1496,7 @@ LUA_API void *lua_newuserdata (lua_State *L, size_t size) {
 }
 
 
-
+//获取upvalue，
 static const char *aux_upvalue (StkId fi, int n, TValue **val,
                                 CClosure **owner, UpVal **uv) {
   switch (ttype(fi)) {
@@ -1550,14 +1549,16 @@ LUA_API const char *lua_setupvalue (lua_State *L, int funcindex, int n) {
   if (name) {
     L->top--;
     setobj(L, val, L->top);
+    //C closure
     if (owner) { luaC_barrier(L, owner, L->top); }
+    //Lua closure
     else if (uv) { luaC_upvalbarrier(L, uv); }
   }
   lua_unlock(L);
   return name;
 }
 
-
+//获取LClosure的upval引用，同时获取fidx的LClosure*，pf作为out reference
 static UpVal **getupvalref (lua_State *L, int fidx, int n, LClosure **pf) {
   LClosure *f;
   StkId fi = index2addr(L, fidx);
@@ -1595,6 +1596,7 @@ LUA_API void lua_upvaluejoin (lua_State *L, int fidx1, int n1,
   UpVal **up2 = getupvalref(L, fidx2, n2, NULL);
   //up1 refcount--
   luaC_upvdeccount(L, *up1);
+  //指针更新，故指向的地址需要减引用，以及加引用
   *up1 = *up2;
   //up2 refcount++ 
   (*up1)->refcount++;

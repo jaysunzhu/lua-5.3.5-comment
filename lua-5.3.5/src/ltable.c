@@ -226,7 +226,7 @@ static unsigned int findindex (lua_State *L, Table *t, StkId key) {
       ** 如果相等，那么也当作是找到了对应的节点，也会计算出下标，并返回。
       */
       
-      //死键在 rehash 后会从哈希表中清除，而不添加新键就不会 rehash 表而导致死键消失。在这个前提下，遍历 table 是安全的
+      //死键在 rehash 后会从哈希表中清除。而不添加新键就不会 rehash 表，在这个前提下，遍历 table 是安全的
       if (luaV_rawequalobj(gkey(n), key) ||
             (ttisdeadkey(gkey(n)) && iscollectable(key) &&
              deadvalue(gkey(n)) == gcvalue(key))) {
@@ -393,6 +393,7 @@ static int numusehash (const Table *t, unsigned int *nums, unsigned int *pna) {
   int i = sizenode(t);
   while (i--) {
     Node *n = &t->node[i];
+    //只需看value不为nil，为nil即deadkey
     if (!ttisnil(gval(n))) {
       ause += countint(gkey(n), nums);
       totaluse++;
@@ -560,6 +561,7 @@ static void rehash (lua_State *L, Table *t, const TValue *ek) {
   
   na = numusearray(t, nums);  /* count keys in array part */
   totaluse = na;  /* all those keys are integer keys */
+  //deadkey会在rehash内清理
   totaluse += numusehash(t, nums, &na);  /* count keys in hash part */
   na += countint(ek, nums);/* count extra key */
   totaluse++;/* count extra key */
@@ -759,6 +761,7 @@ const TValue *luaH_getint (Table *t, lua_Integer key) {
 /*
 ** search function for short strings
 */
+/* 从lua表中获取键值为短字符串类型的value信息 */
 const TValue *luaH_getshortstr (Table *t, TString *key) {
 
   /*
@@ -774,7 +777,8 @@ const TValue *luaH_getshortstr (Table *t, TString *key) {
   */
   for (;;) {  /* check whether 'key' is somewhere in the chain */
     const TValue *k = gkey(n);
-    if (ttisshrstring(k) && eqshrstr(tsvalue(k), key))//直接对比内存地址，不需要逐字节对比
+    //直接对比内存地址，不需要逐字节对比
+    if (ttisshrstring(k) && eqshrstr(tsvalue(k), key))
       return gval(n);  /* that's it */
     else {
       int nx = gnext(n);
@@ -790,15 +794,10 @@ const TValue *luaH_getshortstr (Table *t, TString *key) {
 ** "Generic" get version. (Not that generic: not valid for integers,
 ** which may be in array part, nor for floats with integral values.)
 */
-/*
-** 根据参数指定的key信息从lua表的散列表部分获取对应的value信息。
-** 流程是先计算出key信息对应的mainposition，然后遍历落在这个mainposition
-** 中的所有Node节点，找到键值等于参数指定的key的Node节点，然后返回该节点的
-** value信息。
-*/
 static const TValue *getgeneric (Table *t, const TValue *key) {
   Node *n = mainposition(t, key);
   for (;;) {  /* check whether 'key' is somewhere in the chain */
+    //长字符串：长度和内存比较
     if (luaV_rawequalobj(gkey(n), key))
       return gval(n);  /* that's it */
     else {
@@ -818,10 +817,7 @@ const TValue *luaH_getstr (Table *t, TString *key) {
     //短字符串：直接对比内存地址，不需要逐字节对比
     return luaH_getshortstr(t, key);
   else {  /* for long strings, use generic case */
-    /*
-    ** 如果是长字符串，则根据TString类型的key生成一个Node节点的key对象，
-    ** 然后调用getgeneric()获取对应的vlaue信息。
-    */
+    //长字符串：长度和内存比较
     TValue ko;
     setsvalue(cast(lua_State *, NULL), &ko, key);
     return getgeneric(t, &ko);

@@ -108,7 +108,7 @@ typedef struct GCObject GCObject;
 ** included in other objects)
 */
 // next：在allgc链表中，指定下一个gc对象的指针
-// tt_：记录gc对象的类型，不同的gc对象在propagate阶段有不同的处理逻辑
+// tt：记录gc对象的类型，不同的gc对象在propagate阶段有不同的处理逻辑
 // marked：用来标记gc对象颜色用的，默认是currentwhite
 #define CommonHeader	GCObject *next; lu_byte tt; lu_byte marked
 
@@ -154,6 +154,7 @@ typedef union Value {
 ** 原始数据类型由GC标记位、变种类型标记位和基本类型标记位组成。
 ** 如果不需要进行GC，则GC标记位为0，如果无变种类型，则变种标记位为0.
 */
+//tt_ 对于table的 为key的TValue，tt_还有一个表示LUA_TDEADKEY，表示keyvalue已经失效
 #define TValuefields	Value value_; int tt_
 
 /*
@@ -332,7 +333,7 @@ typedef struct lua_TValue {
     val_(io).gc = obj2gco(x_); settt_(io, ctb(LUA_TTABLE)); \
     checkliveness(L,io); }
 
-//设置为deadkey。table key特有状态
+//设置为deadkey。table value为nil时，key对象特有状态。
 #define setdeadvalue(obj)	settt_(obj, LUA_TDEADKEY)
 
 
@@ -419,7 +420,7 @@ typedef struct TString {
     struct TString *hnext;  /* linked list for hash table */
   } u;
   //内存对象模型中，TString后长度为len+1的空间就是字符串所在内存
-  char *pData;//debug使用
+  char *temp;
 } TString;
 
 
@@ -511,6 +512,7 @@ typedef union UUdata {
 ** Description of an upvalue for function prototypes
 */
 /* lua函数upvalue描述信息 */
+//proto负数内容Upvaldesc，在编译时候已经确定
 typedef struct Upvaldesc {
   //当外层函数并没有退出时，我们调用刚生成的闭包，这个时候闭包更像一个普通的内嵌函数。外层函数
   // 的局部变量只是数据栈上的一个普通变量，虚拟机用一个数据栈上的索引映射局部变量，内嵌函数可以通过
@@ -518,9 +520,11 @@ typedef struct Upvaldesc {
   // 其它方式访问这些 upvalue 。
   
   TString *name;  /* upvalue name (for debug information) */
-  //是否在stack上。instack是再parser就确定了。_ENV必定不在栈上
+  //是否在stack上。chunk的closure中_ENV是在栈上，其他closure _ENV不在栈上
   lu_byte instack;  /* whether it is in stack (register) */
-  //instack==true, base+idx地址获得，否则在outer function's list，encup[idx]，可参考getcached
+  //instack==true, 在数据栈上base+idx地址获得引用，可参考pushclosure或getcached
+  //instack==false, 在上级调用函数的upvalue中获取引用，可参考pushclosure或getcached
+  //instack==true效率更低，可参考luaF_findupval
   lu_byte idx;  /* index of upvalue (in stack or in outer function's list) */
 } Upvaldesc;
 
@@ -530,6 +534,7 @@ typedef struct Upvaldesc {
 ** (used for debug information)
 */
 /* lua函数中定义的本地变量 */
+//debug使用
 typedef struct LocVar {
   TString *varname;
   //记录active在proto的pc区间[startpc，endpc)
@@ -557,7 +562,6 @@ typedef struct Proto {
   lu_byte is_vararg;  
   
   //数据栈slot数量，包含了此proto的参数、局部变量以及proto中所有call函数中最多的实参和对于1个cl，不含upvalue。空函数情况下为2
-  // todo:maxstacksize 会和sizelocvars大小不一样吗？
   lu_byte maxstacksize;  /* number of registers needed by this function */
 
   /* cl对应的Upvalue的个数。 */
@@ -574,7 +578,7 @@ typedef struct Proto {
   //该函数（原型）内定义了函数的的数量
   int sizep;  /* size of 'p' */
   
-  //包含局部变量（注意：含闭包定义）和参数(注意:语法糖中的self)
+  //包含局部变量（注意：含闭包function定义）和参数(注意:语法糖中的self)
   int sizelocvars;
   
   int linedefined;  /* debug information  */
@@ -634,16 +638,14 @@ typedef struct CClosure {
 typedef struct LClosure {
   ClosureHeader;
   struct Proto *p; /* 存放lua闭包对应的函数原型信息 */
-
-	/* lua闭包所使用的upvalue列表 */
-  
+    
   //Lua Closure对象的upval有两种来源，
   //第一、Lua 闭包一般在虚拟机运行的过程中被动态构造出来的。这时，闭包需引用的 upval 都在当前
   //的数据栈上, 利用 luaF_findupval 可以把数据栈上的值转换为 upval
   //第二种生成 Lua 闭包的方式是加载一段 Lua 代码。每段 Lua 代码都会被编译成一个函数原型，但 Lua
-  //的外部 API 是不返回函数原型对象的，而是把这个函数原型转换为一个 Lua 闭包对象。如果从源代码加载
-  //的话，不可能有用户构建出来的 upval 的。但是，任何一个代码块都至少有一个 upval ： _ENV
-  //闭包只是又upvalue的引用，因为多个闭包可以用相同的upvalue的引用
+  //的外部 API 是不返回函数proto的，而是把这个函数原型转换为一个 Lua closure。
+  
+  //闭包只是对upvalue的引用，因为多个闭包可以用相同的upvalue的引用
   UpVal *upvals[1];  /* list of upvalues */
 } LClosure;
 
